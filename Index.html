@@ -130,12 +130,12 @@ button.edit:hover{background:var(--panel-2);color:var(--fg)}
 .icard .itot small{font:500 11px var(--font-body);color:var(--fg-2);margin-left:4px}
 .stack{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--panel-2)}
 .stack i{display:block;height:100%}
-.stack i.f1{background:#8CC68C} .stack i.f2{background:#6FA3D9} .stack i.f3{background:#D9B24A} .stack i.f4{background:#E88B5A} .stack i.f5{background:#9C8ACB}
+.stack i.fb3{background:#9A9A94} .stack i.f1{background:#8CC68C} .stack i.f2{background:#6FA3D9} .stack i.f3{background:#D9B24A} .stack i.f4{background:#E88B5A} .stack i.f5{background:#9C8ACB}
 .fchips{display:flex;flex-wrap:wrap;gap:4px}
 .fchip{font-size:12px;border-radius:999px;padding:2px 9px;background:var(--panel-2);display:inline-flex;gap:5px;align-items:center}
 .fchip b{font-family:var(--font-num)}
 .fchip::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--line)}
-.fchip.f1::before{background:#8CC68C} .fchip.f2::before{background:#6FA3D9} .fchip.f3::before{background:#D9B24A} .fchip.f4::before{background:#E88B5A} .fchip.f5::before{background:#9C8ACB}
+.fchip.fb3::before{background:#9A9A94} .fchip.f1::before{background:#8CC68C} .fchip.f2::before{background:#6FA3D9} .fchip.f3::before{background:#D9B24A} .fchip.f4::before{background:#E88B5A} .fchip.f5::before{background:#9C8ACB}
 .fchip.zero{opacity:.45}
 .banner{border-radius:16px;padding:10px 16px;background:var(--lime-2);font-size:13px}
 .banner.warn{background:var(--orange-2)}
@@ -256,13 +256,16 @@ details+details{margin-top:8px}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-const FLOORS=["1층","2층","3층","4층","5층"];
+const FLOORS=["지하3층","1층","2층","3층","4층","5층"];
+const FL={"지하3층":"B3","1층":"1F","2층":"2F","3층":"3F","4층":"4F","5층":"5F"};
+const FCODE={"지하3층":"b3","1층":"1","2층":"2","3층":"3","4층":"4","5층":"5"};
+const flab=f=>FL[f]||f;
 let data={spaces:[],items:[],init:[],moves:[],sheetUrl:""};
 let sel="5층", query="", editing=null, busy=false;
 try{const s=localStorage.getItem("hikr_sel"); if(s) sel=s}catch(e){}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const SHORT={"1층 웰컴데스크":"웰컴데스크","2층 서브인포":"서브인포","2층 인포 창고":"인포 창고","2층 비품창고":"비품창고","2층 화물엘베 앞":"화물엘베 앞","3층 사무국":"사무국","3층 휴게실":"휴게실","3층 창고":"창고","4층 창고":"창고","4층 시스템실":"시스템실","5층 굿즈샵":"굿즈샵","5층 휴게공간":"휴게공간"};
+const SHORT={"1층 웰컴데스크":"웰컴데스크","2층 서브인포":"서브인포","2층 인포 창고":"인포 창고","2층 비품창고":"비품창고","2층 화물엘베 앞":"화물엘베 앞","3층 사무국":"사무국","3층 휴게실":"휴게실","3층 창고":"창고","4층 창고":"창고","4층 시스템실":"시스템실","5층 굿즈샵":"굿즈샵","5층 휴게공간":"휴게공간","지하3층 창고":"창고"};
 const short=n=>SHORT[n]||n;
 const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 const setMsg=(id,t,err)=>{const el=$(id);el.className="msg"+(err?" err":"");el.textContent=t};
@@ -314,10 +317,10 @@ function render(){
   $("#kpis").innerHTML=`
     <div class="kpi lime"><div class="blob"></div><div class="ic">▣</div><div class="v num">${total}</div><div class="l">전체 보유 수량 · ${perItem.length}종</div></div>
     <div class="kpi ${low.length?"orange":"limelt"}"><div class="blob"></div><div class="ic">!</div><div class="v num">${low.length}</div><div class="l">${low.length?"부족 품목: "+esc(low.map(i=>i.name).join(", ")):"부족 품목 없음"}</div></div>
-    <div class="kpi peach"><div class="blob"></div><div class="ic">${sel.replace("층","")}</div><div class="v num">${selTotal}</div><div class="l">${sel} 보유 · ${floorKinds[sel]}종 · 전체의 ${total?Math.round(selTotal/total*100):0}%</div></div>
+    <div class="kpi peach"><div class="blob"></div><div class="ic">${flab(sel).replace("F","")}</div><div class="v num">${selTotal}</div><div class="l">${sel} 보유 · ${floorKinds[sel]}종 · 전체의 ${total?Math.round(selTotal/total*100):0}%</div></div>
     <div class="kpi limelt"><div class="blob"></div><div class="ic">⇄</div><div class="v num">${data.moves.filter(m=>m.ok==="O").length}</div><div class="l">이동 기록 · 마지막 ${data.moves.map(m=>m.date).sort().pop()||"-"}</div></div>`;
 
-  $("#floorNav").innerHTML=[...FLOORS].reverse().map(f=>`<button class="fbtn" aria-selected="${f===sel}" data-f="${f}">${f.replace("층","F")}<small>${floorTotals[f]}</small></button>`).join("");
+  $("#floorNav").innerHTML=[...FLOORS].reverse().map(f=>`<button class="fbtn" aria-selected="${f===sel}" data-f="${f}">${flab(f)}<small>${floorTotals[f]}</small></button>`).join("");
   $("#floorNav").querySelectorAll(".fbtn").forEach(b=>b.onclick=()=>{sel=b.dataset.f;try{localStorage.setItem("hikr_sel",sel)}catch(e){};render()});
 
   $("#building").innerHTML=[...FLOORS].reverse().map(f=>{
@@ -327,7 +330,7 @@ function render(){
       return `<div class="space ${list.length?"":"empty"}"><div class="sn"><span>${esc(short(s.name))}</span><span class="num">${list.length?sum:"비어 있음"}</span></div><div class="items">${list.map(([id,q])=>`<span class="tag ${q<0?"neg":""}">${esc(nameOf[id]||id)}<b>${q}</b></span>`).join("")}</div></div>`;
     }).join("");
     return `<div class="floorcard ${f===sel?"":"compact"}" aria-selected="${f===sel}" data-f="${f}" role="button" tabindex="0">
-      <div class="flabel"><div class="fno num">${f.replace("층","F")}</div><div class="fname">${esc(sps.map(s=>short(s.name)).join(" · "))}</div><div class="ftotal">${floorTotals[f]}<small>개 · ${floorKinds[f]}종</small></div></div>
+      <div class="flabel"><div class="fno num">${flab(f)}</div><div class="fname">${esc(sps.map(s=>short(s.name)).join(" · "))}</div><div class="ftotal">${floorTotals[f]}<small>개 · ${floorKinds[f]}종</small></div></div>
       <div class="spaces">${cards}</div></div>`;
   }).join("");
   $("#building").querySelectorAll(".floorcard").forEach(c=>{const go=()=>{sel=c.dataset.f;try{localStorage.setItem("hikr_sel",sel)}catch(e){};render()}; c.onclick=go; c.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}}});
@@ -339,14 +342,14 @@ function render(){
     ${itemsHere.map(i=>`<tr><td>${esc(i.name)}</td>${sps.map(s=>{const q=(stock[i.id]||{})[s.name]||0;return `<td class="r num" ${q<0?'style="color:var(--bad)"':""}>${q||""}</td>`}).join("")}<td class="r num" style="font-weight:700">${i.byFloor[sel]||0}</td></tr>`).join("")||`<tr><td colspan="${sps.length+2}" class="msg">${perItem.length?"이 층에 배치된 비품이 없습니다":"아직 등록된 비품이 없습니다."}</td></tr>`}
     </tbody></table></div>`;
 
-  const fi=f=>"f"+f.replace("층","");
+  const fi=f=>"f"+(FCODE[f]||f);
   $("#itemCards").innerHTML=perItem.map(i=>{
     const spacesOf=f=>Object.entries(stock[i.id]||{}).filter(([sp,q])=>q!==0&&(data.spaces.find(s=>s.name===sp)||{}).floor===f).map(([sp,q])=>`${short(sp)} ${q}`).join(", ");
     return `<div class="icard">
       <div class="ih"><div><div class="iname">${esc(i.name)}</div><div class="icat">${esc(i.id)} · ${esc(i.cat||"미분류")} · 최소 ${i.min}</div></div><span class="pill ${i.low?"low":"ok"}">${i.low?"부족":"정상"}</span></div>
       <div class="itot num">${i.total}<small>개 · ${FLOORS.filter(f=>(i.byFloor[f]||0)!==0).length}개 층</small></div>
       <div class="stack">${FLOORS.map(f=>{const q=i.byFloor[f]||0;return q>0&&i.total>0?`<i class="${fi(f)}" style="width:${q/i.total*100}%" title="${f} ${q}"></i>`:""}).join("")}</div>
-      <div class="fchips">${FLOORS.map(f=>{const q=i.byFloor[f]||0;return `<span class="fchip ${fi(f)} ${q?"":"zero"}" title="${esc(spacesOf(f))}">${f.replace("층","F")}<b>${q}</b></span>`}).join("")}</div>
+      <div class="fchips">${FLOORS.map(f=>{const q=i.byFloor[f]||0;return `<span class="fchip ${fi(f)} ${q?"":"zero"}" title="${esc(spacesOf(f))}">${flab(f)}<b>${q}</b></span>`}).join("")}</div>
     </div>`}).join("")||`<div class="icard"><div class="msg">등록된 비품이 없습니다.</div></div>`;
   $("#itemTotals").innerHTML=`<div class="ph"><h2>비품 × 층 합계표</h2><span class="msg">${perItem.length}종 · 전체 ${total}개</span></div>
     <div class="scroll" style="max-height:380px"><table><thead><tr><th>비품</th><th>분류</th>${FLOORS.map(f=>`<th class="r">${f}</th>`).join("")}<th class="r">총 보유</th><th class="r">최소</th><th>상태</th></tr></thead><tbody>
@@ -466,11 +469,11 @@ function buildWorkbook(){
   for(let k=0;k<NR;k++){ const r=4+k, src=r+1;
     const row=[{t:"s",f:`현재현황!A${src}`},{t:"s",f:`현재현황!B${src}`},{t:"s",f:`IF($A${r}="","",IFERROR(INDEX(비품목록!$C:$C,MATCH($A${r},비품목록!$A:$A,0)),""))`}];
     FLOORS.forEach((f,i)=>row.push({t:"n",f:`IF($A${r}="","",SUMIF(현재현황!$C$3:$${col(2+N)}$3,${col(4+i)}$3,현재현황!$C${src}:$${col(2+N)}${src}))`}));
-    row.push({t:"n",f:`IF($A${r}="","",SUM(D${r}:H${r}))`},{t:"n",f:`현재현황!${col(cM)}${src}`},{t:"s",f:`현재현황!${col(cS)}${src}`});
+    row.push({t:"n",f:`IF($A${r}="","",SUM(D${r}:${col(3+FLOORS.length)}${r}))`},{t:"n",f:`현재현황!${col(cM)}${src}`},{t:"s",f:`현재현황!${col(cS)}${src}`});
     s6.push(row); }
-  const T6=4+NR; const t6=["","층 합계",""]; for(let j=4;j<=9;j++) t6.push({t:"n",f:`SUM(${col(j)}4:${col(j)}${T6-1})`}); s6.push(t6);
-  add("층별요약",s6,[10,16,12,9,9,9,9,9,12,10,8]);
-  const d=[["하이커그라운드 비품 대시보드"],["모든 값은 자동 계산됩니다."],[],["등록 비품 종류",{t:"n",f:`COUNTA(비품목록!A2:A${NR+1})`}],["전체 보유 수량",{t:"n",f:`현재현황!${col(cT)}${TOT}`}],["부족 품목 수",{t:"n",f:`COUNTIF(현재현황!${col(cS)}5:${col(cS)}${TOT-1},"부족")`}],["누적 이동 건수(적용)",{t:"n",f:`COUNTIF(이동기록!I2:I${allMoves.length+200},"O")`}],[],["층","총 수량"],...FLOORS.map((f,i)=>[f,{t:"n",f:`층별요약!${col(4+i)}${T6}`}]),["합계",{t:"n",f:"SUM(B10:B14)"}],[],["층","공간","총 수량"],...sp.map((s,j)=>[s.floor,s.name,{t:"n",f:`현재현황!${col(3+j)}${TOT}`}])];
+  const T6=4+NR; const t6=["","층 합계",""]; for(let j=4;j<=4+FLOORS.length;j++) t6.push({t:"n",f:`SUM(${col(j)}4:${col(j)}${T6-1})`}); s6.push(t6);
+  add("층별요약",s6,[10,16,12,...FLOORS.map(()=>9),12,10,8]);
+  const d=[["하이커그라운드 비품 대시보드"],["모든 값은 자동 계산됩니다."],[],["등록 비품 종류",{t:"n",f:`COUNTA(비품목록!A2:A${NR+1})`}],["전체 보유 수량",{t:"n",f:`현재현황!${col(cT)}${TOT}`}],["부족 품목 수",{t:"n",f:`COUNTIF(현재현황!${col(cS)}5:${col(cS)}${TOT-1},"부족")`}],["누적 이동 건수(적용)",{t:"n",f:`COUNTIF(이동기록!I2:I${allMoves.length+200},"O")`}],[],["층","총 수량"],...FLOORS.map((f,i)=>[f,{t:"n",f:`층별요약!${col(4+i)}${T6}`}]),["합계",{t:"n",f:`SUM(B10:B${9+FLOORS.length})`}],[],["층","공간","총 수량"],...sp.map((s,j)=>[s.floor,s.name,{t:"n",f:`현재현황!${col(3+j)}${TOT}`}])];
   add("대시보드",d,[22,22,10]);
   return wb;
 }
