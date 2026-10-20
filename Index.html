@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>하이커 비품 보드</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: dark pill sidebar with floor buttons · main column = greeting + blob KPI cards + the "building" (floors stacked 5F→1F, selected floor expands) · right rail = item matrix, move log, move entry. Stacks to one column on phones. */
+:root{
+  --bg:#EFEFED; --panel:#FFFFFF; --panel-2:#F6F6F3; --line:#E3E3DE; --ink:#121212; --ink-ink:#FFFFFF;
+  --fg:#161616; --fg-2:#6B6B66; --lime:#D9F56C; --lime-2:#EEFBB4; --orange:#F0863B; --orange-2:#F9DCC8; --bad:#C8402F;
+  --font-body:"Noto Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-num:"Space Grotesk","Noto Sans KR",sans-serif;
+  --r:24px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141414; --panel:#1F1F1E; --panel-2:#292927; --line:#353533; --ink:#F2F2EE; --ink-ink:#121212;
+  --fg:#EDEDE8; --fg-2:#9C9C95; --lime:#B9D94A; --lime-2:#3A4520; --orange:#E57A2E; --orange-2:#4A2E1E; --bad:#F26A58; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141414; --panel:#1F1F1E; --panel-2:#292927; --line:#353533; --ink:#F2F2EE; --ink-ink:#121212;
+  --fg:#EDEDE8; --fg-2:#9C9C95; --lime:#B9D94A; --lime-2:#3A4520; --orange:#E57A2E; --orange-2:#4A2E1E; --bad:#F26A58; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5;
+  padding-block:16px 40px;padding-left:16px;padding-right:16px}
+h1,h2,h3{margin:0;text-wrap:balance;line-height:1.2}
+h1{font-size:28px;font-weight:900;letter-spacing:-.02em}
+h2{font-size:17px;font-weight:700}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-2);font-weight:700}
+.msg{font-size:12px;color:var(--fg-2)} .msg.err{color:var(--bad)}
+.app{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:76px minmax(0,1.35fr) minmax(300px,.95fr);gap:18px;align-items:start}
+@media (max-width:1000px){.app{grid-template-columns:76px minmax(0,1fr)} .rail{grid-column:2}}
+@media (max-width:640px){.app{grid-template-columns:1fr} .side{flex-direction:row;position:static;padding:10px;width:auto;overflow-x:auto} .rail{grid-column:1}}
+/* sidebar */
+.side{background:var(--ink);color:var(--ink-ink);border-radius:40px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:8px;position:sticky;top:calc(16px + env(safe-area-inset-top,0px))}
+.logo{width:48px;height:48px;border-radius:50%;background:var(--lime);color:#121212;display:grid;place-items:center;font:900 15px var(--font-num);margin-bottom:6px;flex:none}
+.fbtn{width:52px;height:52px;border-radius:50%;border:0;background:transparent;color:var(--ink-ink);font:700 14px var(--font-num);cursor:pointer;display:grid;place-items:center;flex:none}
+.fbtn[aria-selected="true"]{background:var(--panel);color:var(--fg)}
+.fbtn small{display:block;font:500 9px var(--font-body);opacity:.7;margin-top:-2px}
+.side .sp{flex:1} @media (max-width:640px){.side .sp{display:none}}
+.fbtn.up{background:var(--orange);color:#121212}
+.fbtn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+/* main */
+.main{display:grid;gap:18px;min-width:0}
+header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-start;justify-content:space-between}
+header .sub{color:var(--fg-2);margin-top:4px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{background:var(--panel);border-radius:999px;padding:8px 14px;font-weight:500;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.chip.drop{cursor:pointer;border:1.5px dashed transparent} .chip.drop.over{border-color:var(--orange)}
+.chip.drop input{display:none}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi{position:relative;overflow:hidden;border-radius:var(--r);background:var(--panel);padding:18px 18px 16px;min-height:118px;isolation:isolate}
+.kpi .blob{position:absolute;right:-30px;top:-30px;width:130px;height:120px;border-radius:52% 48% 60% 40%/55% 45% 55% 45%;z-index:-1;opacity:.95}
+.kpi.lime .blob{background:var(--lime)} .kpi.orange{background:var(--orange);color:#121212} .kpi.orange .blob{background:var(--orange-2)} .kpi.peach .blob{background:var(--orange-2)} .kpi.limelt .blob{background:var(--lime-2)}
+.kpi .v{font:700 30px/1 var(--font-num);margin-top:10px}
+.kpi .l{font-size:13px;color:inherit;opacity:.8;margin-top:4px}
+.kpi .ic{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--ink-ink);display:grid;place-items:center;font-size:14px}
+.kpi.orange .ic{background:#121212;color:#fff}
+/* building */
+.building{display:grid;gap:10px}
+.floorcard{background:var(--panel);border-radius:var(--r);padding:14px 16px;display:grid;grid-template-columns:120px minmax(0,1fr);gap:14px;cursor:pointer;border:2px solid transparent;transition:border-color .15s}
+.floorcard[aria-selected="true"]{border-color:var(--lime)}
+.floorcard:hover{border-color:var(--line)}
+.flabel{display:grid;align-content:start;gap:2px}
+.flabel .fno{font:900 34px/1 var(--font-num);letter-spacing:-.03em}
+.flabel .fname{font-size:12px;color:var(--fg-2);line-height:1.35}
+.flabel .ftotal{margin-top:6px;display:inline-flex;align-items:baseline;gap:4px;background:var(--lime-2);border-radius:999px;padding:3px 10px;width:max-content;font:700 14px var(--font-num)}
+.flabel .ftotal small{font:500 11px var(--font-body);color:var(--fg-2)}
+.spaces{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;min-width:0}
+.space{background:var(--panel-2);border-radius:16px;padding:10px 12px;min-width:0}
+.space .sn{font-weight:700;font-size:13px;display:flex;justify-content:space-between;gap:6px;align-items:baseline}
+.space .sn .num{font-weight:700;background:var(--ink);color:var(--ink-ink);border-radius:999px;padding:0 8px;font-size:12px}
+.space.empty .sn .num{background:transparent;color:var(--fg-2);font-weight:500;font-size:11px}
+.space .items{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.tag{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:12px;white-space:nowrap}
+.tag b{font-family:var(--font-num);margin-left:4px}
+.tag.neg{border-color:var(--bad);color:var(--bad)}
+.floorcard.compact .spaces{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+.floorcard.compact .space{padding:7px 10px;border-radius:12px}
+.floorcard.compact .space .items{display:none}
+.floorcard.compact .flabel .fno{font-size:24px}
+.floorcard.compact{opacity:.88}
+.detail{background:var(--panel);border-radius:var(--r);padding:16px 18px}
+.detail .ph{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+/* rail */
+.rail{display:grid;gap:14px;min-width:0}
+.card{background:var(--panel);border-radius:var(--r);padding:16px 18px;min-width:0}
+.card.lime{background:var(--lime);color:#121212}
+.card .ch{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.card .ch .ic{width:36px;height:36px;border-radius:12px;background:var(--ink);color:var(--ink-ink);display:grid;place-items:center;font-size:16px;flex:none}
+.card.lime .ch .ic{background:#121212;color:#fff}
+.card.lime h2{color:#121212}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2);font-weight:700;position:sticky;top:0;background:var(--panel)}
+td.r,th.r{text-align:right}
+.scroll{overflow-x:auto;max-height:360px;overflow-y:auto;background:var(--panel);border-radius:14px}
+.card.lime .scroll{color:var(--fg)}
+.card.lime .scroll table{margin:0}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:11px;font-weight:700}
+.pill.ok{background:var(--lime-2);color:var(--fg)} .pill.low{background:var(--orange);color:#121212} .pill.pend{background:var(--orange-2);color:var(--fg)}
+.rowsel{display:grid;gap:4px}
+.rowsel button{text-align:left;border:0;background:var(--panel);border-radius:999px;padding:9px 14px;font:inherit;font-weight:500;color:var(--fg);cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.rowsel button[aria-pressed="true"]{background:var(--ink);color:var(--ink-ink)}
+input[type=search],input[type=text],input[type=date],input[type=number],select{font:inherit;color:var(--fg);background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:8px 11px;width:100%;min-width:0}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.form label{display:grid;gap:4px;font-size:12px;color:var(--fg-2);font-weight:700}
+.btn{font:inherit;font-weight:700;border-radius:999px;border:0;background:var(--panel-2);color:var(--fg);padding:9px 16px;cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--ink-ink)} .btn.lime{background:var(--lime);color:#121212}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.note{font-size:12px;color:var(--fg-2);margin:8px 0 0}
+textarea{width:100%;font:12px var(--font-num);background:var(--panel-2);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:8px;min-height:80px}
+button.edit{border:0;background:transparent;color:var(--fg-2);cursor:pointer;font-size:13px;padding:0 4px;border-radius:6px}
+button.edit:hover{background:var(--panel-2);color:var(--fg)}
+.editrow td{white-space:normal;background:var(--panel-2)}
+.editbox{display:grid;grid-template-columns:1.4fr 1fr .7fr;gap:8px;align-items:end}
+.editbox label{display:grid;gap:3px;font-size:11px;font-weight:700;color:var(--fg-2)}
+.editbox .actions{grid-column:1/-1}
+@media (max-width:480px){.editbox{grid-template-columns:1fr 1fr}}
+.viewtabs{display:flex;gap:6px;background:var(--panel);border-radius:999px;padding:5px;width:max-content;max-width:100%}
+.vtab{border:0;background:transparent;color:var(--fg);font:inherit;font-weight:700;border-radius:999px;padding:8px 16px;cursor:pointer}
+.vtab[aria-selected="true"]{background:var(--ink);color:var(--ink-ink)}
+.itemgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.icard{background:var(--panel);border-radius:20px;padding:14px 16px;min-width:0;display:grid;gap:8px}
+.icard .ih{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.icard .iname{font-weight:700;font-size:15px}
+.icard .icat{font-size:11px;color:var(--fg-2)}
+.icard .itot{font:700 28px/1 var(--font-num)}
+.icard .itot small{font:500 11px var(--font-body);color:var(--fg-2);margin-left:4px}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--panel-2)}
+.stack i{display:block;height:100%}
+.stack i.f1{background:#8CC68C} .stack i.f2{background:#6FA3D9} .stack i.f3{background:#D9B24A} .stack i.f4{background:#E88B5A} .stack i.f5{background:#9C8ACB}
+.fchips{display:flex;flex-wrap:wrap;gap:4px}
+.fchip{font-size:12px;border-radius:999px;padding:2px 9px;background:var(--panel-2);display:inline-flex;gap:5px;align-items:center}
+.fchip b{font-family:var(--font-num)}
+.fchip::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--line)}
+.fchip.f1::before{background:#8CC68C} .fchip.f2::before{background:#6FA3D9} .fchip.f3::before{background:#D9B24A} .fchip.f4::before{background:#E88B5A} .fchip.f5::before{background:#9C8ACB}
+.fchip.zero{opacity:.45}
+.banner{border-radius:16px;padding:10px 16px;background:var(--lime-2);font-size:13px}
+.banner.warn{background:var(--orange-2)}
+details summary{list-style:none;display:inline-flex;align-items:center;gap:6px;background:var(--lime);color:#121212;border-radius:999px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;user-select:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸"} details[open] summary::before{content:"▾"}
+details+details{margin-top:8px}
+@media (prefers-reduced-motion:reduce){.floorcard{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side" aria-label="층 선택">
+    <div class="logo">HK</div>
+    <div id="floorNav" style="display:contents"></div>
+    <div class="sp"></div>
+    <a class="fbtn up" id="sheetBtn" title="구글 시트 열기" href="#" target="_blank" rel="noopener" style="text-decoration:none">📊</a>
+  </nav>
+
+  <div class="main">
+    <header>
+      <div>
+        <h1>하이커 비품 보드 👋</h1>
+        <div class="sub" id="meta">데이터 불러오는 중…</div>
+      </div>
+      <div class="chips">
+        <span class="chip num" id="clock"></span>
+        <label class="chip" style="gap:8px">👤 <input type="text" id="whoName" placeholder="내 이름" style="width:90px;padding:2px 6px;border-radius:8px"></label>
+        <button class="chip" id="refreshBtn" type="button" style="border:0;cursor:pointer;font:inherit">↻ 새로고침</button>
+      </div>
+    </header>
+
+    <div class="banner" id="banner" hidden></div>
+
+    <section class="kpis" id="kpis"></section>
+
+    <div class="viewtabs" role="tablist">
+      <button class="vtab" id="vFloor" role="tab" aria-selected="true">🏢 층별 보기</button>
+      <button class="vtab" id="vItem" role="tab" aria-selected="false">📦 비품별 보기</button>
+    </div>
+
+    <div id="floorView">
+      <section>
+        <div class="eyebrow" style="margin:0 6px 8px">층별 비품 배치 · 위에서부터 5층 → 1층</div>
+        <div class="building" id="building"></div>
+      </section>
+      <section class="detail" id="detail" style="margin-top:18px"></section>
+    </div>
+
+    <div id="itemView" hidden>
+      <section>
+        <div class="eyebrow" style="margin:0 6px 8px">비품별 층 합계 · 막대는 층별 비중</div>
+        <div class="itemgrid" id="itemCards"></div>
+      </section>
+      <section class="detail" id="itemTotals" style="margin-top:18px"></section>
+    </div>
+  </div>
+
+  <aside class="rail">
+    <section class="card lime">
+      <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">▦</div><h2>품목별 층 분포</h2></div><input type="search" id="q" placeholder="품명·분류 검색" style="max-width:170px;background:var(--panel)"></div>
+      <div class="scroll" style="max-height:320px">
+        <table id="itemTable"><thead><tr><th>품명</th><th class="r">1</th><th class="r">2</th><th class="r">3</th><th class="r">4</th><th class="r">5</th><th class="r">합계</th><th>상태</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">✎</div><h2>이동 입력</h2></div></div>
+      <form id="moveForm" class="form">
+        <label>이동일<input type="date" id="mDate" required></label>
+        <label>비품<select id="mItem" required></select></label>
+        <label>출발 공간<select id="mFrom" required></select></label>
+        <label>도착 공간<select id="mTo" required></select></label>
+        <label>수량<input type="number" id="mQty" min="1" value="1" required></label>
+        <label style="grid-column:1/-1">사유/비고<input type="text" id="mWhy" placeholder="예: 행사 세팅"></label>
+      </form>
+      <div class="actions">
+        <button class="btn primary" id="addMove" type="button">이동 기록 저장</button>
+        <button class="btn lime" id="exportXlsx" type="button">⬇ 엑셀로 저장</button>
+      </div>
+      <div class="msg" id="formMsg" style="margin-top:8px"></div>
+    </section>
+
+    <section class="card">
+      <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">⇄</div><h2>이동 기록</h2></div><span class="msg" id="moveCount"></span></div>
+      <div class="scroll" style="max-height:260px">
+        <table id="moveTable"><thead><tr><th>이동일</th><th>품명</th><th>출발 → 도착</th><th class="r">수량</th><th>담당</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">＋</div><h2>신규 비품 · 입고</h2></div><span class="msg">처음 보는 비품은 등록 → 입고, 있는 비품은 입고만</span></div>
+      <details id="newItemBox"><summary>＋ 새 비품 등록</summary>
+        <form id="itemForm" class="form" style="margin-top:8px">
+          <label>비품ID<input type="text" id="iId" placeholder="E008" required pattern="[A-Za-z0-9_.-]+"></label>
+          <label>품명<input type="text" id="iName" required></label>
+          <label>분류<input type="text" id="iCat" placeholder="가구 / POP / 장비"></label>
+          <label>최소보유<input type="number" id="iMin" min="0" value="0"></label>
+          <label style="grid-column:1/-1">규격·비고<input type="text" id="iNote"></label>
+        </form>
+        <div class="actions"><button class="btn primary" id="addItem" type="button">비품 등록</button></div>
+      </details>
+      <details id="stockBox" style="margin-top:8px"><summary>⬇ 입고 등록 (구매·추가 수량)</summary>
+        <form id="stockForm" class="form" style="margin-top:8px">
+          <label>등록일<input type="date" id="sDate" required></label>
+          <label>비품<select id="sItem" required></select></label>
+          <label>공간<select id="sSpace" required></select></label>
+          <label>수량<input type="number" id="sQty" min="1" value="1" required></label>
+          <label>상태<select id="sState"><option>배치</option><option>여분</option></select></label>
+          <label style="grid-column:1/-1">비고<input type="text" id="sNote" placeholder="예: 10/25 20개 구매"></label>
+        </form>
+        <div class="actions"><button class="btn primary" id="addStock" type="button">입고 저장</button></div>
+      </details>
+      <div class="msg" id="regMsg" style="margin-top:8px"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const FLOORS=["1층","2층","3층","4층","5층"];
+let data={spaces:[],items:[],init:[],moves:[],sheetUrl:""};
+let sel="5층", query="", editing=null, busy=false;
+try{const s=localStorage.getItem("hikr_sel"); if(s) sel=s}catch(e){}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const SHORT={"1층 웰컴데스크":"웰컴데스크","2층 서브인포":"서브인포","2층 인포 창고":"인포 창고","2층 비품창고":"비품창고","2층 화물엘베 앞":"화물엘베 앞","3층 사무국":"사무국","3층 휴게실":"휴게실","3층 창고":"창고","4층 창고":"창고","4층 시스템실":"시스템실","5층 굿즈샵":"굿즈샵","5층 휴게공간":"휴게공간"};
+const short=n=>SHORT[n]||n;
+const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
+const setMsg=(id,t,err)=>{const el=$(id);el.className="msg"+(err?" err":"");el.textContent=t};
+function banner(t,kind){const b=$("#banner"); if(!t){b.hidden=true;return} b.hidden=false; b.className="banner "+(kind||""); b.textContent=t}
+const hasGS=typeof google!=="undefined"&&google.script&&google.script.run;
+
+// ---------- 서버 호출 (Apps Script) ----------
+function call(fn,...args){
+  return new Promise((res,rej)=>{
+    if(!hasGS){ rej(new Error("Apps Script 웹앱으로 배포된 주소에서 열어야 데이터가 연결됩니다.")); return }
+    google.script.run.withSuccessHandler(res).withFailureHandler(e=>rej(new Error(e&&e.message||String(e))))[fn](...args);
+  });
+}
+function applyData(d){ data=d; $("#sheetBtn").href=d.sheetUrl||"#"; $("#meta").textContent=`구글 시트 연동 · 비품 ${d.items.length}종 · 이동 ${d.moves.length}건 · ${new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",hour12:false})} 기준`; banner(d.items.length?"":"아직 등록된 비품이 없습니다. 오른쪽 '신규 비품·입고'에서 등록하거나 구글 시트 '비품목록' 탭에 직접 입력하세요."); render(); }
+async function refresh(silent){
+  try{ applyData(await call("getData")); }
+  catch(e){ if(!silent) banner(e.message,"warn"); $("#meta").textContent="연결 안 됨"; render(); }
+}
+async function mutate(fn,args,okMsg,msgId,btn){
+  if(busy) return false; busy=true; if(btn) btn.disabled=true;
+  try{ applyData(await call(fn,...args)); setMsg(msgId,okMsg); return true }
+  catch(e){ setMsg(msgId,e.message,true); return false }
+  finally{ busy=false; if(btn) btn.disabled=false }
+}
+
+function compute(){
+  const stock={}; data.items.forEach(it=>{stock[it.id]={}});
+  const add=(id,sp,q)=>{ if(!stock[id]) stock[id]={}; stock[id][sp]=(stock[id][sp]||0)+q };
+  data.init.forEach(r=>add(r.id,r.space,r.qty));
+  data.moves.filter(m=>m.ok==="O").forEach(m=>{add(m.id,m.to,m.qty);add(m.id,m.from,-m.qty)});
+  const floorOf={}; data.spaces.forEach(s=>floorOf[s.name]=s.floor);
+  const perItem=data.items.map(it=>{
+    const byFloor={}; let total=0;
+    for(const [sp,q] of Object.entries(stock[it.id]||{})){ const f=floorOf[sp]; if(f&&FLOORS.includes(f)){byFloor[f]=(byFloor[f]||0)+q; total+=q} }
+    return {...it,byFloor,total,low:total<it.min};
+  });
+  return {stock,perItem,floorOf};
+}
+function render(){
+  const {stock,perItem}=compute();
+  const nameOf={}; data.items.forEach(i=>nameOf[i.id]=i.name);
+  const total=perItem.reduce((a,b)=>a+b.total,0);
+  const low=perItem.filter(i=>i.low);
+  const floorTotals={}, floorKinds={};
+  FLOORS.forEach(f=>{floorTotals[f]=perItem.reduce((a,i)=>a+(i.byFloor[f]||0),0); floorKinds[f]=perItem.filter(i=>(i.byFloor[f]||0)!==0).length});
+  const selTotal=floorTotals[sel]||0;
+  const spaceList=sp=>Object.entries(stock).map(([id,m])=>[id,m[sp]||0]).filter(([,q])=>q!==0);
+
+  $("#kpis").innerHTML=`
+    <div class="kpi lime"><div class="blob"></div><div class="ic">▣</div><div class="v num">${total}</div><div class="l">전체 보유 수량 · ${perItem.length}종</div></div>
+    <div class="kpi ${low.length?"orange":"limelt"}"><div class="blob"></div><div class="ic">!</div><div class="v num">${low.length}</div><div class="l">${low.length?"부족 품목: "+esc(low.map(i=>i.name).join(", ")):"부족 품목 없음"}</div></div>
+    <div class="kpi peach"><div class="blob"></div><div class="ic">${sel.replace("층","")}</div><div class="v num">${selTotal}</div><div class="l">${sel} 보유 · ${floorKinds[sel]}종 · 전체의 ${total?Math.round(selTotal/total*100):0}%</div></div>
+    <div class="kpi limelt"><div class="blob"></div><div class="ic">⇄</div><div class="v num">${data.moves.filter(m=>m.ok==="O").length}</div><div class="l">이동 기록 · 마지막 ${data.moves.map(m=>m.date).sort().pop()||"-"}</div></div>`;
+
+  $("#floorNav").innerHTML=[...FLOORS].reverse().map(f=>`<button class="fbtn" aria-selected="${f===sel}" data-f="${f}">${f.replace("층","F")}<small>${floorTotals[f]}</small></button>`).join("");
+  $("#floorNav").querySelectorAll(".fbtn").forEach(b=>b.onclick=()=>{sel=b.dataset.f;try{localStorage.setItem("hikr_sel",sel)}catch(e){};render()});
+
+  $("#building").innerHTML=[...FLOORS].reverse().map(f=>{
+    const sps=data.spaces.filter(s=>s.floor===f);
+    const cards=sps.map(s=>{
+      const list=spaceList(s.name); const sum=list.reduce((a,[,q])=>a+q,0);
+      return `<div class="space ${list.length?"":"empty"}"><div class="sn"><span>${esc(short(s.name))}</span><span class="num">${list.length?sum:"비어 있음"}</span></div><div class="items">${list.map(([id,q])=>`<span class="tag ${q<0?"neg":""}">${esc(nameOf[id]||id)}<b>${q}</b></span>`).join("")}</div></div>`;
+    }).join("");
+    return `<div class="floorcard ${f===sel?"":"compact"}" aria-selected="${f===sel}" data-f="${f}" role="button" tabindex="0">
+      <div class="flabel"><div class="fno num">${f.replace("층","F")}</div><div class="fname">${esc(sps.map(s=>short(s.name)).join(" · "))}</div><div class="ftotal">${floorTotals[f]}<small>개 · ${floorKinds[f]}종</small></div></div>
+      <div class="spaces">${cards}</div></div>`;
+  }).join("");
+  $("#building").querySelectorAll(".floorcard").forEach(c=>{const go=()=>{sel=c.dataset.f;try{localStorage.setItem("hikr_sel",sel)}catch(e){};render()}; c.onclick=go; c.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}}});
+
+  const sps=data.spaces.filter(s=>s.floor===sel);
+  const itemsHere=perItem.filter(i=>(i.byFloor[sel]||0)!==0);
+  $("#detail").innerHTML=`<div class="ph"><h2>${sel} 상세 — 공간 × 비품</h2><span class="msg">${sps.length}개 공간 · ${itemsHere.length}종 · ${selTotal}개</span></div>
+    <div class="scroll" style="max-height:300px"><table><thead><tr><th>비품</th>${sps.map(s=>`<th class="r">${esc(short(s.name))}</th>`).join("")}<th class="r">${sel} 합계</th></tr></thead><tbody>
+    ${itemsHere.map(i=>`<tr><td>${esc(i.name)}</td>${sps.map(s=>{const q=(stock[i.id]||{})[s.name]||0;return `<td class="r num" ${q<0?'style="color:var(--bad)"':""}>${q||""}</td>`}).join("")}<td class="r num" style="font-weight:700">${i.byFloor[sel]||0}</td></tr>`).join("")||`<tr><td colspan="${sps.length+2}" class="msg">${perItem.length?"이 층에 배치된 비품이 없습니다":"아직 등록된 비품이 없습니다."}</td></tr>`}
+    </tbody></table></div>`;
+
+  const fi=f=>"f"+f.replace("층","");
+  $("#itemCards").innerHTML=perItem.map(i=>{
+    const spacesOf=f=>Object.entries(stock[i.id]||{}).filter(([sp,q])=>q!==0&&(data.spaces.find(s=>s.name===sp)||{}).floor===f).map(([sp,q])=>`${short(sp)} ${q}`).join(", ");
+    return `<div class="icard">
+      <div class="ih"><div><div class="iname">${esc(i.name)}</div><div class="icat">${esc(i.id)} · ${esc(i.cat||"미분류")} · 최소 ${i.min}</div></div><span class="pill ${i.low?"low":"ok"}">${i.low?"부족":"정상"}</span></div>
+      <div class="itot num">${i.total}<small>개 · ${FLOORS.filter(f=>(i.byFloor[f]||0)!==0).length}개 층</small></div>
+      <div class="stack">${FLOORS.map(f=>{const q=i.byFloor[f]||0;return q>0&&i.total>0?`<i class="${fi(f)}" style="width:${q/i.total*100}%" title="${f} ${q}"></i>`:""}).join("")}</div>
+      <div class="fchips">${FLOORS.map(f=>{const q=i.byFloor[f]||0;return `<span class="fchip ${fi(f)} ${q?"":"zero"}" title="${esc(spacesOf(f))}">${f.replace("층","F")}<b>${q}</b></span>`}).join("")}</div>
+    </div>`}).join("")||`<div class="icard"><div class="msg">등록된 비품이 없습니다.</div></div>`;
+  $("#itemTotals").innerHTML=`<div class="ph"><h2>비품 × 층 합계표</h2><span class="msg">${perItem.length}종 · 전체 ${total}개</span></div>
+    <div class="scroll" style="max-height:380px"><table><thead><tr><th>비품</th><th>분류</th>${FLOORS.map(f=>`<th class="r">${f}</th>`).join("")}<th class="r">총 보유</th><th class="r">최소</th><th>상태</th></tr></thead><tbody>
+    ${perItem.map(i=>`<tr><td style="font-weight:700">${esc(i.name)}</td><td class="msg">${esc(i.cat||"")}</td>${FLOORS.map(f=>`<td class="r num">${i.byFloor[f]||""}</td>`).join("")}<td class="r num" style="font-weight:700">${i.total}</td><td class="r num">${i.min}</td><td><span class="pill ${i.low?"low":"ok"}">${i.low?"부족":"정상"}</span></td></tr>`).join("")}
+    <tr style="font-weight:700;background:var(--panel-2)"><td>층 합계</td><td></td>${FLOORS.map(f=>`<td class="r num">${floorTotals[f]}</td>`).join("")}<td class="r num">${total}</td><td></td><td></td></tr>
+    </tbody></table></div>`;
+
+  const q=query.trim().toLowerCase();
+  $("#itemTable tbody").innerHTML=perItem.filter(i=>!q||(i.name+i.cat+i.id).toLowerCase().includes(q)).map(i=>{
+    if(editing===i.id) return `<tr class="editrow"><td colspan="8"><div class="editbox">
+      <label>품명<input type="text" id="eName" value="${esc(i.name)}" required></label>
+      <label>분류<input type="text" id="eCat" value="${esc(i.cat||"")}"></label>
+      <label>최소보유<input type="number" id="eMin" min="0" value="${i.min||0}"></label>
+      <div class="actions" style="margin:0"><button class="btn primary small" id="eSave" type="button">저장</button><button class="btn small" id="eCancel" type="button">취소</button><span class="msg">${esc(i.id)}</span></div>
+    </div></td></tr>`;
+    return `<tr><td>${esc(i.name)} <button class="edit" data-edit="${esc(i.id)}" title="이름·분류·최소보유 수정">✎</button><div class="msg">${esc(i.cat)} · 최소 ${i.min}</div></td>${FLOORS.map(f=>`<td class="r num" ${f===sel?'style="font-weight:700"':""}>${i.byFloor[f]||""}</td>`).join("")}<td class="r num" style="font-weight:700">${i.total}</td><td><span class="pill ${i.low?"low":"ok"}">${i.low?"부족":"정상"}</span></td></tr>`}).join("")||`<tr><td colspan="8" class="msg">${perItem.length?"검색 결과 없음":"등록된 비품 없음"}</td></tr>`;
+  $("#itemTable").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{editing=b.dataset.edit;render();const e=$("#eName");if(e)e.focus()});
+  if(editing){ const it=data.items.find(i=>i.id===editing);
+    $("#eCancel").onclick=()=>{editing=null;render()};
+    $("#eSave").onclick=async()=>{ const name=$("#eName").value.trim(); if(!name){setMsg("#formMsg","품명을 입력하세요.",true);return}
+      const patch={name,cat:$("#eCat").value.trim(),min:Number($("#eMin").value)||0};
+      if(it&&it.name===patch.name&&(it.cat||"")===patch.cat&&(it.min||0)===patch.min){editing=null;render();return}
+      const id=editing; editing=null;
+      await mutate("updateItem",[id,patch],`${it?it.name:""} → ${name} 변경 저장`,"#formMsg",$("#eSave")); };
+    $("#eName").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();$("#eSave").click()} if(e.key==="Escape"){editing=null;render()}};
+  }
+
+  const sorted=[...data.moves].sort((a,b)=>(b.date||"").localeCompare(a.date||"")||b.row-a.row);
+  $("#moveCount").textContent=`${data.moves.length}건`;
+  $("#moveTable tbody").innerHTML=sorted.map(m=>`<tr><td class="num">${esc(m.date)}</td><td>${esc(nameOf[m.id]||m.id)}</td><td>${esc(short(m.from))} → ${esc(short(m.to))}${m.why?`<div class="msg">${esc(m.why)}</div>`:""}</td><td class="r num">${m.qty}</td><td>${esc(m.who||"")}</td><td>${m.ok==="O"?`<button class="btn small" data-del="${m.row}" title="삭제">✕</button>`:'<span class="pill pend">미적용</span>'}</td></tr>`).join("")||`<tr><td colspan="6" class="msg">이동 기록 없음</td></tr>`;
+  $("#moveTable").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delMove(Number(b.dataset.del),b));
+
+  const opt=(arr,f)=>arr.map(v=>`<option value="${esc(v)}">${esc(f?f(v):v)}</option>`).join("");
+  const keep=id=>{const el=$(id);const v=el.value;return ()=>{if([...el.options].some(o=>o.value===v)) el.value=v}};
+  const ks=["#mItem","#mFrom","#mTo","#sItem","#sSpace"].map(keep);
+  $("#mItem").innerHTML=$("#sItem").innerHTML=opt(data.items.map(i=>i.id),id=>`${id} ${nameOf[id]}`);
+  $("#mFrom").innerHTML=$("#sSpace").innerHTML=opt(data.spaces.filter(s=>s.name!=="폐기").map(s=>s.name));
+  $("#mTo").innerHTML=opt(data.spaces.map(s=>s.name));
+  ks.forEach(k=>k());
+}
+async function delMove(row,btn){
+  if(btn.dataset.armed!=="1"){ btn.dataset.armed="1"; btn.textContent="삭제?"; setTimeout(()=>{btn.dataset.armed="";btn.textContent="✕"},3000); return }
+  const m=data.moves.find(x=>x.row===row); if(!m) return;
+  await mutate("deleteMove",[row,{id:m.id,from:m.from,to:m.to,qty:m.qty,date:m.date}],"이동 기록을 삭제했습니다.","#formMsg",btn);
+}
+
+// ---------- 입력 ----------
+$("#mDate").value=$("#sDate").value=today();
+try{ $("#whoName").value=localStorage.getItem("hikr_who")||"" }catch(e){}
+$("#whoName").onchange=e=>{try{localStorage.setItem("hikr_who",e.target.value.trim())}catch(err){}};
+$("#addMove").onclick=async()=>{
+  if(!$("#moveForm").reportValidity()) return;
+  const m={date:$("#mDate").value,id:$("#mItem").value,from:$("#mFrom").value,to:$("#mTo").value,qty:Number($("#mQty").value),who:$("#whoName").value.trim(),why:$("#mWhy").value.trim()};
+  if(!m.id){ setMsg("#formMsg","먼저 비품을 등록하세요.",true); return }
+  if(m.from===m.to){ setMsg("#formMsg","출발과 도착 공간이 같습니다.",true); return }
+  const have=((compute().stock[m.id]||{})[m.from]||0);
+  const warn=have<m.qty?` (주의: ${short(m.from)}에 ${have}개뿐이라 수량이 음수가 됩니다)`:"";
+  const ok=await mutate("addMove",[m],"저장했습니다. 구글 시트 '이동기록'에 기록되고 모두에게 반영됩니다."+warn,"#formMsg",$("#addMove"));
+  if(ok){ $("#mQty").value=1; $("#mWhy").value=""; }
+};
+$("#addItem").onclick=async()=>{
+  if(!$("#itemForm").reportValidity()) return;
+  const it={id:$("#iId").value.trim(),name:$("#iName").value.trim(),cat:$("#iCat").value.trim(),spec:$("#iNote").value.trim(),unit:"개",min:Number($("#iMin").value)||0,note:""};
+  const ok=await mutate("addItem",[it],`${it.id} ${it.name} 등록 완료. 이제 '입고'로 수량을 넣으세요.`,"#regMsg",$("#addItem"));
+  if(ok){ $("#itemForm").reset(); $("#stockBox").open=true; }
+};
+$("#addStock").onclick=async()=>{
+  if(!$("#stockForm").reportValidity()) return;
+  const r={date:$("#sDate").value,id:$("#sItem").value,space:$("#sSpace").value,qty:Number($("#sQty").value),state:$("#sState").value,note:$("#sNote").value.trim()};
+  if(!r.id){ setMsg("#regMsg","먼저 비품을 등록하세요.",true); return }
+  const ok=await mutate("addStock",[r],`${short(r.space)}에 ${r.qty}개 입고 저장.`,"#regMsg",$("#addStock"));
+  if(ok){ $("#sQty").value=1; $("#sNote").value=""; }
+};
+$("#q").oninput=e=>{query=e.target.value;render()};
+$("#refreshBtn").onclick=()=>refresh(false);
+let view="floor"; try{view=localStorage.getItem("hikr_view")||"floor"}catch(e){}
+function setView(v){view=v; $("#floorView").hidden=v!=="floor"; $("#itemView").hidden=v!=="item"; $("#vFloor").setAttribute("aria-selected",v==="floor"); $("#vItem").setAttribute("aria-selected",v==="item"); try{localStorage.setItem("hikr_view",v)}catch(e){}}
+$("#vFloor").onclick=()=>setView("floor"); $("#vItem").onclick=()=>setView("item"); setView(view);
+
+// ---------- 엑셀 내보내기 (수식 포함) ----------
+function buildWorkbook(){
+  const {stock}=compute();
+  const sp=data.spaces.filter(s=>FLOORS.includes(s.floor)); const N=sp.length;
+  const col=n=>XLSX.utils.encode_col(n-1);
+  const dcell=s=>s?{t:"d",v:new Date(s+"T00:00:00"),z:"yyyy-mm-dd"}:"";
+  const wb=XLSX.utils.book_new();
+  const add=(name,aoa,widths)=>{const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true}); if(widths) ws["!cols"]=widths.map(w=>({wch:w})); XLSX.utils.book_append_sheet(wb,ws,name); return ws};
+  const nameF=r=>({t:"s",f:`IF(B${r}="","",IFERROR(INDEX(비품목록!$B:$B,MATCH(B${r},비품목록!$A:$A,0)),"ID없음"))`});
+  add("사용안내",[["하이커그라운드 층별 비품 관리 대장 (보드에서 내보냄 "+new Date().toLocaleString("ko-KR",{hour12:false})+")"],[""],["이동기록 시트에 한 줄 입력하면 현재현황·층별요약·대시보드가 자동 계산됩니다. 적용 열이 O인 행만 반영됩니다."]],[120]);
+  add("공간목록",[["층","공간코드","공간명"],...data.spaces.map((s,i)=>[s.floor,s.name==="폐기"?"S999":"S"+String(i+1).padStart(3,"0"),s.name])],[10,12,24]);
+  add("비품목록",[["비품ID","품명","분류","규격/상세","단위","최소보유수량","비고"],...data.items.map(i=>[i.id,i.name,i.cat||"",i.spec||"",i.unit||"",i.min||0,i.note||""])],[10,18,14,18,8,14,30]);
+  add("초기배치",[["등록일","비품ID","품명(자동)","공간","수량","상태","비고"],...data.init.map((r,i)=>[dcell(r.date),r.id,nameF(i+2),r.space,r.qty,r.state||"",r.note||""])],[12,10,16,20,8,8,40]);
+  const allMoves=[...data.moves].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  add("이동기록",[["이동일","비품ID","품명(자동)","출발공간","도착공간","수량","담당자","사유/비고","적용(O/X)"],...allMoves.map((m,i)=>[dcell(m.date),m.id,nameF(i+2),m.from,m.to,m.qty,m.who||"",m.why||"",m.ok||"O"])],[12,10,16,20,20,8,10,30,10]);
+  const NR=data.items.length+20, cT=3+N, cD=cT+1, cM=cT+2, cS=cT+3, TOT=5+NR;
+  const aoa=[["공간별 현재 수량 (자동 계산: 초기배치 + 도착 이동 − 출발 이동, 적용=O 만 반영)"],[],["","",...sp.map(s=>s.floor)],["비품ID","품명",...sp.map(s=>s.name),"현재 총보유","폐기 누계","최소보유","상태"]];
+  for(let k=0;k<NR;k++){
+    const r=5+k, it=data.items[k];
+    const row=[{t:"s",f:`IF(비품목록!A${r-3}="","",비품목록!A${r-3})`,v:it?it.id:""},{t:"s",f:`IF($A${r}="","",IFERROR(INDEX(비품목록!$B:$B,MATCH($A${r},비품목록!$A:$A,0)),""))`,v:it?it.name:""}];
+    let tot=0;
+    sp.forEach((s,j)=>{const c=col(3+j); const v=it?((stock[it.id]||{})[s.name]||0):0; tot+=v;
+      row.push({t:"n",v,f:`IF($A${r}="","",SUMIFS(초기배치!$E:$E,초기배치!$B:$B,$A${r},초기배치!$D:$D,${c}$4)+SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,${c}$4,이동기록!$I:$I,"O")-SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$D:$D,${c}$4,이동기록!$I:$I,"O"))`})});
+    row.push({t:"n",v:tot,f:`IF($A${r}="","",SUM(C${r}:${col(2+N)}${r}))`});
+    row.push({t:"n",v:0,f:`IF($A${r}="","",SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,"폐기",이동기록!$I:$I,"O"))`});
+    row.push({t:"n",v:it?it.min||0:0,f:`IF($A${r}="","",IFERROR(INDEX(비품목록!$F:$F,MATCH($A${r},비품목록!$A:$A,0)),0))`});
+    row.push({t:"s",v:it?(tot<(it.min||0)?"부족":"정상"):"",f:`IF($A${r}="","",IF(${col(cT)}${r}<${col(cM)}${r},"부족","정상"))`});
+    aoa.push(row);
+  }
+  const totRow=["","공간 합계"]; for(let j=3;j<=cD;j++) totRow.push({t:"n",f:`SUM(${col(j)}5:${col(j)}${TOT-1})`}); aoa.push(totRow);
+  add("현재현황",aoa,[10,16,...sp.map(()=>11),11,11,11,11]);
+  const s6=[["층별 비품 현황 (자동 계산)"],[],["비품ID","품명","분류",...FLOORS,"현재 총보유","최소보유","상태"]];
+  for(let k=0;k<NR;k++){ const r=4+k, src=r+1;
+    const row=[{t:"s",f:`현재현황!A${src}`},{t:"s",f:`현재현황!B${src}`},{t:"s",f:`IF($A${r}="","",IFERROR(INDEX(비품목록!$C:$C,MATCH($A${r},비품목록!$A:$A,0)),""))`}];
+    FLOORS.forEach((f,i)=>row.push({t:"n",f:`IF($A${r}="","",SUMIF(현재현황!$C$3:$${col(2+N)}$3,${col(4+i)}$3,현재현황!$C${src}:$${col(2+N)}${src}))`}));
+    row.push({t:"n",f:`IF($A${r}="","",SUM(D${r}:H${r}))`},{t:"n",f:`현재현황!${col(cM)}${src}`},{t:"s",f:`현재현황!${col(cS)}${src}`});
+    s6.push(row); }
+  const T6=4+NR; const t6=["","층 합계",""]; for(let j=4;j<=9;j++) t6.push({t:"n",f:`SUM(${col(j)}4:${col(j)}${T6-1})`}); s6.push(t6);
+  add("층별요약",s6,[10,16,12,9,9,9,9,9,12,10,8]);
+  const d=[["하이커그라운드 비품 대시보드"],["모든 값은 자동 계산됩니다."],[],["등록 비품 종류",{t:"n",f:`COUNTA(비품목록!A2:A${NR+1})`}],["전체 보유 수량",{t:"n",f:`현재현황!${col(cT)}${TOT}`}],["부족 품목 수",{t:"n",f:`COUNTIF(현재현황!${col(cS)}5:${col(cS)}${TOT-1},"부족")`}],["누적 이동 건수(적용)",{t:"n",f:`COUNTIF(이동기록!I2:I${allMoves.length+200},"O")`}],[],["층","총 수량"],...FLOORS.map((f,i)=>[f,{t:"n",f:`층별요약!${col(4+i)}${T6}`}]),["합계",{t:"n",f:"SUM(B10:B14)"}],[],["층","공간","총 수량"],...sp.map((s,j)=>[s.floor,s.name,{t:"n",f:`현재현황!${col(3+j)}${TOT}`}])];
+  add("대시보드",d,[22,22,10]);
+  return wb;
+}
+$("#exportXlsx").onclick=()=>{
+  try{
+    const out=XLSX.write(buildWorkbook(),{type:"array",bookType:"xlsx",cellDates:true});
+    const blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const fn=`하이커그라운드_층별_비품관리대장_${today()}.xlsx`;
+    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=fn; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+    setMsg("#formMsg","엑셀 파일을 내려받았습니다 (수식 포함). 다운로드가 안 보이면 브라우저의 팝업/다운로드 차단을 확인하세요.");
+  }catch(e){ setMsg("#formMsg","저장 실패: "+e.message,true) }
+};
+function tick(){const d=new Date();$("#clock").textContent=d.toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})+" · "+d.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",hour12:false})}
+tick(); setInterval(tick,30000);
+render();
+refresh(false);
+setInterval(()=>{ if(!busy&&!editing&&document.visibilityState==="visible") refresh(true) },30000);
+</script>
+</body></html>
