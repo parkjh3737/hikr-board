@@ -144,6 +144,58 @@ details summary::-webkit-details-marker{display:none}
 details summary::before{content:"▸"} details[open] summary::before{content:"▾"}
 details+details{margin-top:8px}
 @media (prefers-reduced-motion:reduce){.floorcard{transition:none}}
+
+/* ---------- 폰 레이아웃 (≤640px) ---------- */
+@media (max-width:640px){
+  body{padding-block:8px 32px;font-size:14px}
+  h1{font-size:22px}
+  header{gap:8px}
+  header .sub{font-size:12px}
+  .chips{width:100%;gap:6px}
+  .chip{padding:7px 11px;font-size:12px}
+  .app{gap:12px}
+  .side{position:sticky;top:0;z-index:20;border-radius:999px;padding:6px 8px;gap:4px;justify-content:flex-start;flex-direction:row;overflow-x:auto;scrollbar-width:none}
+  .side::-webkit-scrollbar{display:none}
+  .logo{width:38px;height:38px;font-size:12px;margin:0}
+  .fbtn{width:46px;height:46px;font-size:13px}
+  .fbtn.up{margin-left:auto}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{padding:12px 12px 10px;min-height:92px;border-radius:18px}
+  .kpi .v{font-size:22px}
+  .kpi .l{font-size:11px;line-height:1.3}
+  .kpi .blob{width:90px;height:84px;right:-26px;top:-26px}
+  .viewtabs{width:100%;display:flex}
+  .vtab{flex:1;text-align:center;padding:10px 8px}
+  .floorcard{grid-template-columns:1fr;gap:8px;padding:12px;border-radius:18px}
+  .flabel{grid-template-columns:auto 1fr auto;grid-template-areas:"no name total";align-items:center;gap:8px}
+  .flabel .fno{grid-area:no;font-size:22px}
+  .flabel .fname{grid-area:name;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .flabel .ftotal{grid-area:total;margin:0}
+  .spaces{grid-template-columns:1fr 1fr;gap:6px}
+  .space{padding:8px 9px;border-radius:12px}
+  .space .sn{font-size:12px}
+  .tag{font-size:11px;padding:2px 7px}
+  .floorcard.compact .spaces{grid-template-columns:1fr 1fr}
+  .floorcard.compact .flabel .fno{font-size:18px}
+  .detail,.card{padding:12px 12px;border-radius:18px}
+  .card .ch{margin-bottom:8px}
+  .card .ch .ic{width:30px;height:30px;border-radius:9px;font-size:14px}
+  h2{font-size:15px}
+  .itemgrid{grid-template-columns:1fr}
+  .form{grid-template-columns:1fr 1fr;gap:8px}
+  .form label{font-size:12px}
+  input[type=search],input[type=text],input[type=date],input[type=number],select{font-size:16px;padding:10px 11px;border-radius:10px}
+  .btn{padding:11px 16px;font-size:14px;width:100%;text-align:center}
+  .actions{gap:6px}
+  .actions .btn{flex:1 1 45%}
+  .btn.small{width:auto;padding:6px 10px;font-size:12px;flex:0 0 auto}
+  details summary{width:100%;justify-content:center;padding:10px 14px;font-size:14px}
+  table{font-size:12px} th,td{padding:5px 6px}
+  .scroll{max-height:260px!important}
+  .editbox{grid-template-columns:1fr 1fr}
+  #q{max-width:none!important;width:100%}
+}
+@media (max-width:380px){ .spaces,.floorcard.compact .spaces{grid-template-columns:1fr} .kpis{grid-template-columns:1fr 1fr} }
 </style>
 </head>
 <body>
@@ -196,7 +248,7 @@ details+details{margin-top:8px}
 
   <aside class="rail">
     <section class="card lime">
-      <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">▦</div><h2>품목별 층 분포</h2></div><input type="search" id="q" placeholder="품명·분류 검색" style="max-width:170px;background:var(--panel)"></div>
+      <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">▦</div><h2>품목별 층 분포</h2></div><input type="search" id="q" placeholder="품명·분류 검색" style="max-width:170px;background:var(--panel)" autocomplete="off"></div>
       <div class="scroll" style="max-height:320px">
         <table id="itemTable"><thead><tr><th>품명</th><th class="r">1</th><th class="r">2</th><th class="r">3</th><th class="r">4</th><th class="r">5</th><th class="r">합계</th><th>상태</th></tr></thead><tbody></tbody></table>
       </div>
