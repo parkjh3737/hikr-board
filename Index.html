@@ -230,7 +230,7 @@ details+details{margin-top:8px}
       <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">＋</div><h2>신규 비품 · 입고</h2></div><span class="msg">처음 보는 비품은 등록 → 입고, 있는 비품은 입고만</span></div>
       <details id="newItemBox"><summary>＋ 새 비품 등록</summary>
         <form id="itemForm" class="form" style="margin-top:8px">
-          <label>비품ID<input type="text" id="iId" placeholder="E008" required pattern="[A-Za-z0-9_.-]+"></label>
+          <label>비품ID (번호 선택)<div style="display:flex;align-items:center;gap:4px"><span style="font:700 14px var(--font-num);padding:0 2px">E</span><select id="iNum" required></select></div></label>
           <label>품명<input type="text" id="iName" required></label>
           <label>분류<input type="text" id="iCat" placeholder="가구 / POP / 장비"></label>
           <label>최소보유<input type="number" id="iMin" min="0" value="0"></label>
@@ -386,6 +386,12 @@ function render(){
   $("#mFrom").innerHTML=$("#sSpace").innerHTML=opt(data.spaces.filter(s=>s.name!=="폐기").map(s=>s.name));
   $("#mTo").innerHTML=opt(data.spaces.map(s=>s.name));
   ks.forEach(k=>k());
+  // 비품ID 번호 선택: 사용 중인 번호는 제외, 기본값은 다음 번호
+  const used=new Set(data.items.map(i=>i.id)); const sel0=$("#iNum"); const prev=sel0.value;
+  let maxN=0; data.items.forEach(i=>{const m=/^E(\d+)$/.exec(i.id); if(m) maxN=Math.max(maxN,Number(m[1]))});
+  const opts=[]; for(let n=1;n<=300;n++){const id="E"+String(n).padStart(3,"0"); if(!used.has(id)) opts.push(`<option value="${String(n).padStart(3,"0")}">${String(n).padStart(3,"0")}</option>`)}
+  sel0.innerHTML=opts.join(""); const next=String(maxN+1).padStart(3,"0");
+  sel0.value=(prev&&!used.has("E"+prev))?prev:next; if(!sel0.value) sel0.value=next;
 }
 async function delMove(row,btn){
   if(btn.dataset.armed!=="1"){ btn.dataset.armed="1"; btn.textContent="삭제?"; setTimeout(()=>{btn.dataset.armed="";btn.textContent="✕"},3000); return }
@@ -408,7 +414,7 @@ $("#addMove").onclick=async()=>{
 };
 $("#addItem").onclick=async()=>{
   if(!$("#itemForm").reportValidity()) return;
-  const it={id:$("#iId").value.trim(),name:$("#iName").value.trim(),cat:$("#iCat").value.trim(),spec:$("#iNote").value.trim(),unit:"개",min:Number($("#iMin").value)||0,note:""};
+  const it={id:"E"+$("#iNum").value,name:$("#iName").value.trim(),cat:$("#iCat").value.trim(),spec:$("#iNote").value.trim(),unit:"개",min:Number($("#iMin").value)||0,note:""};
   const ok=await mutate("addItem",[it],`${it.id} ${it.name} 등록 완료. 이제 '입고'로 수량을 넣으세요.`,"#regMsg",$("#addItem"));
   if(ok){ $("#itemForm").reset(); $("#stockBox").open=true; }
 };
