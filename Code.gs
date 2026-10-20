@@ -161,6 +161,61 @@ function updateItem(id, patch) {
   });
 }
 
+
+/* =============== 운영 캘린더 (★2026 하이커 그라운드 현장운영/계수 현황 시트) =============== */
+const CAL_SS_ID = '15wjDXDU1kJOXaceGEhbnefbgMDMOENVqicLCY8lQRto';
+const pad2 = n => String(n).padStart(2, '0');
+const ymd = (y, m, d) => y + '-' + pad2(m) + '-' + pad2(d);
+
+/** 해당 월의 캘린더·데일리·계수를 한 번에 반환. ym = 'YYYY-MM' (생략 시 이번 달) */
+function getOps(ym) {
+  const now = new Date();
+  const y = ym ? Number(ym.slice(0, 4)) : Number(Utilities.formatDate(now, TZ, 'yyyy'));
+  const m = ym ? Number(ym.slice(5, 7)) : Number(Utilities.formatDate(now, TZ, 'M'));
+  const book = SpreadsheetApp.openById(CAL_SS_ID);
+  const out = { year: y, month: m, events: [], daily: {}, counts: {}, tabs: [], calUrl: book.getUrl() };
+  out.tabs = book.getSheets().map(sh => sh.getName()).filter(n => /캘린더$/.test(n)).map(n => Number(n.replace(/[^0-9]/g, '')));
+
+  // --- N월 캘린더: '날짜' 행으로 주 블록을 나누고, 병합 셀은 그 기간 전체에 적용 ---
+  const cal = book.getSheetByName(m + '월 캘린더');
+  if (cal) {
+    const rng = cal.getDataRange(); const vals = rng.getValues();
+    const merges = rng.getMergedRanges().map(r => ({ r1: r.getRow(), r2: r.getLastRow(), c1: r.getColumn(), c2: r.getLastColumn() }));
+    const spanOf = (r, c) => { const x = merges.find(q => q.r1 <= r && r <= q.r2 && q.c1 <= c && c <= q.c2); return x ? [x.c1, x.c2, x.r1] : [c, c, r]; };
+    let days = null, cat = '';
+    for (let i = 0; i < vals.length; i++) {
+      const row = vals[i]; const a = String(row[0] || '').trim(); const r = i + 1;
+      if (a === '날짜') { days = {}; for (let c = 2; c <= 7; c++) { const d = Number(row[c - 1]); if (d) days[c] = d; } cat = ''; continue; }
+      if (!days) continue;
+      if (a) cat = a;
+      for (let c = 2; c <= 7; c++) {
+        const t = String(row[c - 1] || '').trim(); if (!t) continue;
+        const [c1, c2, r1] = spanOf(r, c); if (c1 !== c || r1 !== r) continue;
+        for (let cc = c1; cc <= c2; cc++) { const d = days[cc]; if (d) out.events.push({ date: ymd(y, m, d), cat: cat || '기타', text: t }); }
+      }
+    }
+  }
+  // --- N월 데일리: 일자 | 운영 | 시설 | 전달사항 | 특이사항 ---
+  const dl = book.getSheetByName(m + '월 데일리');
+  if (dl) {
+    dl.getDataRange().getValues().forEach(row => {
+      const mt = /(\d+)\s*일/.exec(String(row[0] || '')); if (!mt) return;
+      const rec = { ops: String(row[1] || '').trim(), facility: String(row[2] || '').trim(), notice: String(row[3] || '').trim(), special: String(row[4] || '').trim() };
+      if (rec.ops || rec.facility || rec.notice || rec.special) out.daily[ymd(y, m, Number(mt[1]))] = rec;
+    });
+  }
+  // --- N월 계수: 날짜 | 1층 | 2층 | 3층 | 4층 | 5층 | 전자계수 | 비고 ---
+  const ct = book.getSheetByName(m + '월 계수');
+  if (ct) {
+    ct.getDataRange().getValues().forEach(row => {
+      const mt = /(\d+)\s*일/.exec(String(row[0] || '')); if (!mt) return;
+      const f = [1, 2, 3, 4, 5].map(i => Number(row[i]) || 0); const total = Number(row[6]) || 0;
+      if (f.some(v => v) || total) out.counts[ymd(y, m, Number(mt[1]))] = { floors: f, total, note: String(row[7] || '').trim() };
+    });
+  }
+  return out;
+}
+
 /** 처음 설치 시 빈 시트에 탭·헤더·기본 공간을 만드는 함수 (Apps Script 편집기에서 1회 실행) */
 function setupSheets() {
   const spec = {

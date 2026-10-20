@@ -145,6 +145,33 @@ details summary::before{content:"▸"} details[open] summary::before{content:"�
 details+details{margin-top:8px}
 @media (prefers-reduced-motion:reduce){.floorcard{transition:none}}
 
+/* ---------- 스케줄 ---------- */
+.daystrip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:4px}
+.dbtn{border:0;background:var(--panel-2);border-radius:14px;padding:8px 4px;font:inherit;color:var(--fg);cursor:pointer;display:grid;gap:2px;justify-items:center;min-width:0}
+.dbtn .dw{font-size:11px;color:var(--fg-2);font-weight:700}
+.dbtn .dn{font:700 18px var(--font-num)}
+.dbtn .dc{display:flex;gap:2px;height:6px}
+.dbtn .dc i{width:6px;height:6px;border-radius:50%;display:block}
+.dbtn[aria-selected="true"]{background:var(--ink);color:var(--ink-ink)} .dbtn[aria-selected="true"] .dw{color:var(--ink-ink);opacity:.7}
+.dbtn.today{box-shadow:inset 0 0 0 2px var(--lime)}
+.dbtn.closed{opacity:.45}
+.dc i.c-event{background:var(--orange)} .dc i.c-docent{background:var(--lime)} .dc i.c-prog{background:#9C8ACB} .dc i.c-note{background:var(--fg-2)} .dc i.c-etc{background:var(--line)}
+.dbtn.other{opacity:.55}
+.evlist{display:grid;gap:6px}
+.ev{display:flex;gap:8px;align-items:flex-start;background:var(--panel-2);border-radius:12px;padding:8px 10px;font-size:13px;line-height:1.4}
+.ev .cat{flex:none;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.cat.c-event{background:var(--orange);color:#121212} .cat.c-docent{background:var(--lime);color:#121212} .cat.c-prog{background:var(--f5);color:var(--fg)} .cat.c-note{background:var(--panel);color:var(--fg);border:1px solid var(--line)} .cat.c-etc{background:var(--line);color:var(--fg)}
+.ev .tx{white-space:pre-line;min-width:0}
+.daygrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:860px){.daygrid{grid-template-columns:1fr}}
+.cnt{display:flex;gap:6px;align-items:flex-end;height:60px;margin-top:6px}
+.cnt div{flex:1;display:grid;justify-items:center;gap:2px;font-size:11px;color:var(--fg-2)}
+.cnt b{display:block;width:100%;background:var(--accent,var(--lime));border-radius:6px 6px 0 0;min-height:3px}
+.agenda{display:grid;gap:4px}
+.agenda .row{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer}
+.agenda .row:hover{background:var(--panel-2)}
+.agenda .d{font:700 13px var(--font-num)} .agenda .d small{display:block;font:500 11px var(--font-body);color:var(--fg-2)}
+.agenda .row.today .d{color:var(--orange)}
 /* ---------- 폰 레이아웃 (≤640px) ---------- */
 @media (max-width:640px){
   body{padding-block:8px 32px;font-size:14px}
@@ -193,6 +220,7 @@ details+details{margin-top:8px}
   table{font-size:12px} th,td{padding:5px 6px}
   .scroll{max-height:260px!important}
   .editbox{grid-template-columns:1fr 1fr}
+  .daystrip{gap:4px} .dbtn{padding:6px 2px;border-radius:10px} .dbtn .dn{font-size:15px}
   #q{max-width:none!important;width:100%}
 }
 @media (max-width:380px){ .spaces,.floorcard.compact .spaces{grid-template-columns:1fr} .kpis{grid-template-columns:1fr 1fr} }
@@ -227,6 +255,7 @@ details+details{margin-top:8px}
     <div class="viewtabs" role="tablist">
       <button class="vtab" id="vFloor" role="tab" aria-selected="true">🏢 층별 보기</button>
       <button class="vtab" id="vItem" role="tab" aria-selected="false">📦 비품별 보기</button>
+      <button class="vtab" id="vSched" role="tab" aria-selected="false">📅 스케줄</button>
     </div>
 
     <div id="floorView">
@@ -243,6 +272,22 @@ details+details{margin-top:8px}
         <div class="itemgrid" id="itemCards"></div>
       </section>
       <section class="detail" id="itemTotals" style="margin-top:18px"></section>
+    </div>
+
+    <div id="schedView" hidden>
+      <section class="card">
+        <div class="ch">
+          <div style="display:flex;gap:10px;align-items:center"><div class="ic">📅</div><h2 id="schedTitle">운영 스케줄</h2></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn small" id="mPrev" type="button">◀</button><span class="num" id="schedMonth" style="font-weight:700;min-width:70px;text-align:center"></span><button class="btn small" id="mNext" type="button">▶</button>
+            <button class="btn small lime" id="mToday" type="button">오늘</button>
+          </div>
+        </div>
+        <div class="daystrip" id="daystrip"></div>
+        <div class="msg" id="schedMsg" style="margin-top:6px"></div>
+      </section>
+      <section class="detail" id="dayDetail" style="margin-top:14px"></section>
+      <section class="detail" id="monthAgenda" style="margin-top:14px"></section>
     </div>
   </div>
 
@@ -502,8 +547,61 @@ $("#addStock").onclick=async()=>{
 $("#q").oninput=e=>{query=e.target.value;render()};
 $("#refreshBtn").onclick=()=>refresh(false);
 let view="floor"; try{view=localStorage.getItem("hikr_view")||"floor"}catch(e){}
-function setView(v){view=v; $("#floorView").hidden=v!=="floor"; $("#itemView").hidden=v!=="item"; $("#vFloor").setAttribute("aria-selected",v==="floor"); $("#vItem").setAttribute("aria-selected",v==="item"); try{localStorage.setItem("hikr_view",v)}catch(e){}}
-$("#vFloor").onclick=()=>setView("floor"); $("#vItem").onclick=()=>setView("item"); setView(view);
+function setView(v){view=v; $("#floorView").hidden=v!=="floor"; $("#itemView").hidden=v!=="item"; $("#schedView").hidden=v!=="sched"; $("#vFloor").setAttribute("aria-selected",v==="floor"); $("#vItem").setAttribute("aria-selected",v==="item"); $("#vSched").setAttribute("aria-selected",v==="sched"); try{localStorage.setItem("hikr_view",v)}catch(e){} if(v==="sched") loadOps(); }
+$("#vFloor").onclick=()=>setView("floor"); $("#vItem").onclick=()=>setView("item"); $("#vSched").onclick=()=>setView("sched"); setView(view);
+
+
+// ---------- 운영 스케줄 (캘린더·데일리·계수 시트) ----------
+const opsCache={}; let selDate=today(); let viewYM=today().slice(0,7); let opsLoading=false;
+const DOW=["일","월","화","수","목","금","토"];
+const addDays=(s,n)=>{const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+n);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
+const dow=s=>new Date(s+"T00:00:00").getDay();
+const catClass=c=>/도슨트/.test(c)?"c-docent":/팝업|이벤트|대관/.test(c)?"c-event":/프로그램/.test(c)?"c-prog":"c-etc";
+async function loadOps(force){
+  if(!hasGS){ $("#schedMsg").textContent="스케줄은 배포된 보드(구글 시트 연동)에서만 표시됩니다."; return }
+  const ym=viewYM; if(opsCache[ym]&&!force){ renderSched(); return }
+  if(opsLoading) return; opsLoading=true; $("#schedMsg").textContent="스케줄 불러오는 중…";
+  try{ opsCache[ym]=await call("getOps",ym); $("#schedMsg").textContent=""; }
+  catch(e){ $("#schedMsg").textContent="스케줄 불러오기 실패: "+e.message; opsCache[ym]=null; }
+  opsLoading=false; renderSched();
+}
+function renderSched(){
+  const o=opsCache[viewYM]; const [y,m]=viewYM.split("-").map(Number);
+  $("#schedMonth").textContent=`${y}년 ${m}월`;
+  const ev=d=>o?o.events.filter(e=>e.date===d):[];
+  // 주 스트립: 선택일이 포함된 월~일
+  const wd=dow(selDate); const mon=addDays(selDate,(wd===0?-6:1-wd));
+  const td=today();
+  $("#daystrip").innerHTML=Array.from({length:7},(_,i)=>{const d=addDays(mon,i); const list=ev(d); const dl=o&&o.daily[d];
+    const dots=[...new Set(list.map(e=>catClass(e.cat)))].slice(0,3).map(c=>`<i class="${c}"></i>`).join("")+(dl?'<i class="c-note"></i>':"");
+    return `<button class="dbtn ${d===td?"today":""} ${dow(d)===1?"closed":""} ${d.slice(0,7)!==viewYM?"other":""}" aria-selected="${d===selDate}" data-d="${d}"><span class="dw">${DOW[dow(d)]}</span><span class="dn">${Number(d.slice(8))}</span><span class="dc">${dots}</span></button>`}).join("");
+  $("#daystrip").querySelectorAll(".dbtn").forEach(b=>b.onclick=()=>{selDate=b.dataset.d; const ym=selDate.slice(0,7); if(ym!==viewYM){viewYM=ym; loadOps(); return} renderSched()});
+  // 선택일 상세
+  const list=ev(selDate), dl=o&&o.daily[selDate], ct=o&&o.counts[selDate];
+  const label=`${Number(selDate.slice(5,7))}월 ${Number(selDate.slice(8))}일 (${DOW[dow(selDate)]})${selDate===td?" · 오늘":""}${dow(selDate)===1?" · 휴관":""}`;
+  const groups={}; list.forEach(e=>{(groups[e.cat]=groups[e.cat]||[]).push(e.text)});
+  const evHtml=Object.keys(groups).length?Object.entries(groups).map(([c,ts])=>ts.map(t=>`<div class="ev"><span class="cat ${catClass(c)}">${esc(c)}</span><span class="tx">${esc(t)}</span></div>`).join("")).join(""):`<div class="msg">등록된 일정 없음</div>`;
+  const dlHtml=dl?[["운영",dl.ops],["시설",dl.facility],["전달사항",dl.notice],["특이사항",dl.special]].filter(([,v])=>v).map(([k,v])=>`<div class="ev"><span class="cat c-note">${k}</span><span class="tx">${esc(v)}</span></div>`).join(""):`<div class="msg">데일리 기록 없음</div>`;
+  const mx=ct?Math.max(1,...ct.floors):1;
+  const ctHtml=ct?`<div class="cnt">${ct.floors.map((v,i)=>`<div><span class="num" style="color:var(--fg)">${v}</span><b style="height:${Math.round(v/mx*40)+3}px"></b><span>${i+1}층</span></div>`).join("")}</div><div class="msg" style="margin-top:4px">전자계수 ${ct.total}${ct.note?" · "+esc(ct.note):""}</div>`:`<div class="msg">계수 기록 없음</div>`;
+  $("#dayDetail").innerHTML=`<div class="ph"><h2>${label}</h2><span class="msg">${o?`${list.length}건 일정`:""}</span></div>
+    <div class="daygrid">
+      <div><div class="eyebrow" style="margin-bottom:6px">팝업 · 이벤트 · 도슨트</div><div class="evlist">${evHtml}</div></div>
+      <div><div class="eyebrow" style="margin-bottom:6px">데일리 (운영·시설·전달)</div><div class="evlist">${dlHtml}</div>
+        <div class="eyebrow" style="margin:12px 0 2px">관람객 계수</div>${ctHtml}</div>
+    </div>`;
+  // 월 아젠다
+  if(!o){ $("#monthAgenda").innerHTML=`<div class="msg">${opsLoading?"불러오는 중…":"이 달의 캘린더 탭이 없습니다."}</div>`; return }
+  const days=[...new Set([...o.events.map(e=>e.date),...Object.keys(o.daily)])].sort();
+  $("#monthAgenda").innerHTML=`<div class="ph"><h2>${m}월 전체 일정</h2><a class="msg" href="${esc(o.calUrl)}" target="_blank" rel="noopener">캘린더 시트 열기 ↗</a></div><div class="agenda">`+
+    (days.map(d=>{const l=o.events.filter(e=>e.date===d); const dd=o.daily[d]; const keyEv=l.filter(e=>!/\(~\d/.test(e.text)); // 장기 대관 제외한 당일 일정
+      const parts=[...keyEv.map(e=>`<span class="cat ${catClass(e.cat)}" style="margin-right:4px">${esc(e.cat.replace("팝업/이벤트","이벤트"))}</span>${esc(e.text.split("\n")[0])}`),...(dd&&dd.notice?[`<span class="cat c-note" style="margin-right:4px">전달</span>${esc(dd.notice.split("\n")[0])}`]:[])];
+      if(!parts.length) return ""; return `<div class="row ${d===td?"today":""}" data-d="${d}"><div class="d">${Number(d.slice(8))}일<small>${DOW[dow(d)]}</small></div><div>${parts.map(p=>`<div style="margin:2px 0">${p}</div>`).join("")}</div></div>`}).join("")||`<div class="msg">일정 없음</div>`)+`</div>`;
+  $("#monthAgenda").querySelectorAll(".row").forEach(r=>r.onclick=()=>{selDate=r.dataset.d; renderSched(); $("#dayDetail").scrollIntoView({behavior:"smooth",block:"start"})});
+}
+$("#mPrev").onclick=()=>{const [y,m]=viewYM.split("-").map(Number); const d=new Date(y,m-2,1); viewYM=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); selDate=viewYM+"-01"; loadOps()};
+$("#mNext").onclick=()=>{const [y,m]=viewYM.split("-").map(Number); const d=new Date(y,m,1); viewYM=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); selDate=viewYM+"-01"; loadOps()};
+$("#mToday").onclick=()=>{selDate=today(); viewYM=selDate.slice(0,7); loadOps()};
 
 // ---------- 엑셀 내보내기 (수식 포함) ----------
 function buildWorkbook(){
