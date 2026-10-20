@@ -82,7 +82,6 @@ function spaceExists(name) { return rows('spaces').some(r => String(r.v[2]).trim
 function addMove(m) {
   return withLock(() => {
     if (!m || !m.id || !m.from || !m.to) throw new Error('비품·출발·도착 공간이 필요합니다.');
-    if (m.from === m.to) throw new Error('출발과 도착 공간이 같습니다.');
     if (!itemExists(m.id)) throw new Error('등록되지 않은 비품ID: ' + m.id);
     if (!spaceExists(m.from) || !spaceExists(m.to)) throw new Error('공간목록에 없는 공간입니다.');
     const qty = Number(m.qty); if (!(qty > 0)) throw new Error('수량은 1 이상이어야 합니다.');

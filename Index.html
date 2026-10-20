@@ -401,7 +401,6 @@ $("#addMove").onclick=async()=>{
   if(!$("#moveForm").reportValidity()) return;
   const m={date:$("#mDate").value,id:$("#mItem").value,from:$("#mFrom").value,to:$("#mTo").value,qty:Number($("#mQty").value),who:$("#whoName").value.trim(),why:$("#mWhy").value.trim()};
   if(!m.id){ setMsg("#formMsg","먼저 비품을 등록하세요.",true); return }
-  if(m.from===m.to){ setMsg("#formMsg","출발과 도착 공간이 같습니다.",true); return }
   const have=((compute().stock[m.id]||{})[m.from]||0);
   const warn=have<m.qty?` (주의: ${short(m.from)}에 ${have}개뿐이라 수량이 음수가 됩니다)`:"";
   const ok=await mutate("addMove",[m],"저장했습니다. 구글 시트 '이동기록'에 기록되고 모두에게 반영됩니다."+warn,"#formMsg",$("#addMove"));
