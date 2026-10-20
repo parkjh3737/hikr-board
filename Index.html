@@ -206,10 +206,10 @@ details+details{margin-top:8px}
       <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">✎</div><h2>이동 입력</h2></div></div>
       <form id="moveForm" class="form">
         <label>이동일<input type="date" id="mDate" required></label>
-        <label>비품<select id="mItem" required></select></label>
         <label>출발 공간<select id="mFrom" required></select></label>
+        <label>비품 (출발 공간에 있는 것만)<select id="mItem" required></select></label>
         <label>도착 공간<select id="mTo" required></select></label>
-        <label>수량<input type="number" id="mQty" min="1" value="1" required></label>
+        <label>수량 <span class="msg" id="mHave"></span><input type="number" id="mQty" min="1" value="1" required></label>
         <label style="grid-column:1/-1">사유/비고<input type="text" id="mWhy" placeholder="예: 행사 세팅"></label>
       </form>
       <div class="actions">
@@ -304,6 +304,22 @@ function compute(){
   });
   return {stock,perItem,floorOf};
 }
+// 이동 입력: 출발 공간에 실제 있는 비품만, 보유 수량까지만
+const nameOfAll=()=>{const n={};data.items.forEach(i=>n[i.id]=i.name);return n};
+function fillMoveItems(){
+  const {stock}=compute(); const nameOf={}; data.items.forEach(i=>nameOf[i.id]=i.name);
+  const from=$("#mFrom").value; const prev=$("#mItem").value;
+  const here=data.items.map(i=>[i.id,(stock[i.id]||{})[from]||0]).filter(([,q])=>q>0);
+  $("#mItem").innerHTML=here.map(([id,q])=>`<option value="${esc(id)}">${esc(nameOf[id])} (${q}개)</option>`).join("")||`<option value="">이 공간에 비품 없음</option>`;
+  if(here.some(([id])=>id===prev)) $("#mItem").value=prev;
+  updateMoveMax();
+}
+function updateMoveMax(){
+  const {stock}=compute(); const from=$("#mFrom").value, id=$("#mItem").value;
+  const have=id?((stock[id]||{})[from]||0):0; const q=$("#mQty");
+  q.max=have||1; if(Number(q.value)>have) q.value=have||1; if(Number(q.value)<1) q.value=1;
+  $("#mHave").textContent=id?`(보유 ${have}개)`:""; $("#addMove").disabled=!id||have<=0;
+}
 function render(){
   const {stock,perItem}=compute();
   const nameOf={}; data.items.forEach(i=>nameOf[i.id]=i.name);
@@ -385,10 +401,11 @@ function render(){
   const opt=(arr,f)=>arr.map(v=>`<option value="${esc(v)}">${esc(f?f(v):v)}</option>`).join("");
   const keep=id=>{const el=$(id);const v=el.value;return ()=>{if([...el.options].some(o=>o.value===v)) el.value=v}};
   const ks=["#mItem","#mFrom","#mTo","#sItem","#sSpace"].map(keep);
-  $("#mItem").innerHTML=$("#sItem").innerHTML=opt(data.items.map(i=>i.id),id=>`${id} ${nameOf[id]}`);
+  $("#sItem").innerHTML=opt(data.items.map(i=>i.id),id=>`${id} ${nameOf[id]}`);
   $("#mFrom").innerHTML=$("#sSpace").innerHTML=opt(data.spaces.filter(s=>s.name!=="폐기").map(s=>s.name));
   $("#mTo").innerHTML=opt(data.spaces.map(s=>s.name));
   ks.forEach(k=>k());
+  fillMoveItems();
   // 비품ID 번호 선택: 사용 중인 번호는 제외, 기본값은 다음 번호
   const used=new Set(data.items.map(i=>i.id)); const sel0=$("#iNum"); const prev=sel0.value;
   let maxN=0; data.items.forEach(i=>{const m=/^E(\d+)$/.exec(i.id); if(m) maxN=Math.max(maxN,Number(m[1]))});
@@ -404,6 +421,7 @@ async function delMove(row,btn){
 
 // ---------- 입력 ----------
 $("#mDate").value=$("#sDate").value=today();
+$("#mFrom").onchange=fillMoveItems; $("#mItem").onchange=updateMoveMax; $("#mQty").oninput=updateMoveMax;
 try{ $("#whoName").value=localStorage.getItem("hikr_who")||"" }catch(e){}
 $("#whoName").onchange=e=>{try{localStorage.setItem("hikr_who",e.target.value.trim())}catch(err){}};
 $("#addMove").onclick=async()=>{
@@ -411,7 +429,8 @@ $("#addMove").onclick=async()=>{
   const m={date:$("#mDate").value,id:$("#mItem").value,from:$("#mFrom").value,to:$("#mTo").value,qty:Number($("#mQty").value),who:$("#whoName").value.trim(),why:$("#mWhy").value.trim()};
   if(!m.id){ setMsg("#formMsg","먼저 비품을 등록하세요.",true); return }
   const have=((compute().stock[m.id]||{})[m.from]||0);
-  const warn=have<m.qty?` (주의: ${short(m.from)}에 ${have}개뿐이라 수량이 음수가 됩니다)`:"";
+  if(m.qty>have){ setMsg("#formMsg",`${short(m.from)}에 ${nameOfAll()[m.id]||m.id}은(는) ${have}개뿐입니다. 수량을 ${have} 이하로 입력하세요.`,true); return }
+  const warn="";
   const ok=await mutate("addMove",[m],"저장했습니다. 구글 시트 '이동기록'에 기록되고 모두에게 반영됩니다."+warn,"#formMsg",$("#addMove"));
   if(ok){ $("#mQty").value=1; $("#mWhy").value=""; }
 };

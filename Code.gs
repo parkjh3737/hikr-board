@@ -78,6 +78,18 @@ function nameFormula(r) { return '=IF(B' + r + '="","",IFERROR(INDEX(비품목�
 function itemExists(id) { return rows('items').some(r => String(r.v[0]).trim() === id); }
 function spaceExists(name) { return rows('spaces').some(r => String(r.v[2]).trim() === name); }
 
+/** 특정 공간의 현재 보유 수량 (초기배치 + 도착 − 출발, 적용 O만) */
+function stockAt(id, space) {
+  let n = 0;
+  rows('init').forEach(r => { if (String(r.v[1]).trim() === id && String(r.v[3]).trim() === space) n += Number(r.v[4]) || 0; });
+  rows('moves').forEach(r => {
+    if (String(r.v[1]).trim() !== id || String(r.v[8] || 'O').trim().toUpperCase() !== 'O') return;
+    if (String(r.v[4]).trim() === space) n += Number(r.v[5]) || 0;
+    if (String(r.v[3]).trim() === space) n -= Number(r.v[5]) || 0;
+  });
+  return n;
+}
+
 /** 이동 기록 추가 */
 function addMove(m) {
   return withLock(() => {
@@ -85,6 +97,8 @@ function addMove(m) {
     if (!itemExists(m.id)) throw new Error('등록되지 않은 비품ID: ' + m.id);
     if (!spaceExists(m.from) || !spaceExists(m.to)) throw new Error('공간목록에 없는 공간입니다.');
     const qty = Number(m.qty); if (!(qty > 0)) throw new Error('수량은 1 이상이어야 합니다.');
+    const have = stockAt(m.id, m.from);
+    if (qty > have) throw new Error(m.from + '에 ' + m.id + '은(는) ' + have + '개뿐입니다. 수량을 ' + have + ' 이하로 입력하세요.');
     const s = sh('moves'); const r = s.getLastRow() + 1;
     s.getRange(r, 1, 1, 9).setValues([[toDate(m.date), m.id, '', m.from, m.to, qty, m.who || '', m.why || '', 'O']]);
     s.getRange(r, 1).setNumberFormat('yyyy-mm-dd');
