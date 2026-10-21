@@ -51,13 +51,15 @@ header .sub{color:var(--fg-2);margin-top:4px}
 .chip{background:var(--panel);border-radius:999px;padding:8px 14px;font-weight:500;display:flex;gap:6px;align-items:center;white-space:nowrap}
 .chip.drop{cursor:pointer;border:1.5px dashed transparent} .chip.drop.over{border-color:var(--orange)}
 .chip.drop input{display:none}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.kpi{position:relative;overflow:hidden;border-radius:var(--r);background:var(--panel);padding:18px 18px 16px;min-height:118px;isolation:isolate}
-.kpi .blob{position:absolute;right:-30px;top:-30px;width:130px;height:120px;border-radius:52% 48% 60% 40%/55% 45% 55% 45%;z-index:-1;opacity:.95}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}}
+.kpi{position:relative;overflow:hidden;border-radius:16px;background:var(--panel);padding:10px 12px 9px;min-height:0;isolation:isolate;display:flex;align-items:center;gap:10px}
+.kpi .blob{position:absolute;right:-24px;top:-24px;width:70px;height:64px;border-radius:52% 48% 60% 40%/55% 45% 55% 45%;z-index:-1;opacity:.95}
 .kpi.lime .blob{background:var(--lime)} .kpi.orange{background:var(--orange);color:#121212} .kpi.orange .blob{background:var(--orange-2)} .kpi.peach .blob{background:var(--orange-2)} .kpi.limelt .blob{background:var(--lime-2)}
-.kpi .v{font:700 30px/1 var(--font-num);margin-top:10px}
-.kpi .l{font-size:13px;color:inherit;opacity:.8;margin-top:4px}
-.kpi .ic{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--ink-ink);display:grid;place-items:center;font-size:14px}
+.kpi .v{font:700 22px/1 var(--font-num);margin:0}
+.kpi .l{font-size:11px;line-height:1.25;color:inherit;opacity:.8;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.kpi .kb{min-width:0;flex:1}
+.kpi .ic{width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--ink-ink);display:grid;place-items:center;font-size:12px;flex:none}
 .kpi.orange .ic{background:#121212;color:#fff}
 /* building */
 .building{display:grid;gap:10px}
@@ -206,10 +208,10 @@ details+details{margin-top:8px}
   .fbtn{width:46px;height:46px;font-size:13px}
   .fbtn.up{margin-left:auto}
   .kpis{grid-template-columns:1fr 1fr;gap:8px}
-  .kpi{padding:12px 12px 10px;min-height:92px;border-radius:18px}
-  .kpi .v{font-size:22px}
-  .kpi .l{font-size:11px;line-height:1.3}
-  .kpi .blob{width:90px;height:84px;right:-26px;top:-26px}
+  .kpi{padding:8px 10px;border-radius:14px}
+  .kpi .v{font-size:19px}
+  .kpi .l{font-size:10.5px}
+  .kpi .blob{width:56px;height:52px;right:-20px;top:-20px}
   .viewtabs{width:100%;display:flex}
   .vtab{flex:1;text-align:center;padding:10px 8px}
   .floorcard{grid-template-columns:1fr;gap:8px;padding:12px;border-radius:18px}
@@ -464,11 +466,11 @@ function render(){
   const spaceList=sp=>Object.entries(stock).map(([id,m])=>[id,m[sp]||0]).filter(([,q])=>q!==0);
 
   $("#kpis").innerHTML=`
-    <div class="kpi lime"><div class="blob"></div><div class="ic">▣</div><div class="v num">${total}</div><div class="l">전체 보유 수량 · ${perItem.length}종</div></div>
-    <div class="kpi ${low.length?"orange":"limelt"}"><div class="blob"></div><div class="ic">!</div><div class="v num">${low.length}</div><div class="l">${low.length?"부족 품목: "+esc(low.map(i=>i.name).join(", ")):"부족 품목 없음"}</div></div>
-    <div class="kpi peach"><div class="blob"></div><div class="ic">${flab(sel).replace("F","")}</div><div class="v num">${selTotal}</div><div class="l">${sel} 보유 · ${floorKinds[sel]}종 · 전체의 ${total?Math.round(selTotal/total*100):0}%</div></div>
-    <div class="kpi ${unplaced.length?"orange":"limelt"} ${unplaced.length?"clickable":""}" id="kpiUnplaced" title="눌러서 위치 정하기"><div class="blob"></div><div class="ic">📍</div><div class="v num">${unplaced.length}</div><div class="l">${unplaced.length?"미배치 비품 · 눌러서 위치 정하기":"미배치 비품 없음"}</div></div>
-    <div class="kpi lime"><div class="blob"></div><div class="ic">🚧</div><div class="v num">${bollard.qty}</div><div class="l">이동 가능 차단봉${bollard.item?` · ${esc(short(BOLLARD_SPACE))}`:" · 차단봉 미등록"}</div></div>`;
+    <div class="kpi lime"><div class="blob"></div><div class="ic">▣</div><div class="kb"><div class="v num">${total}</div><div class="l">전체 보유 수량 · ${perItem.length}종</div></div></div>
+    <div class="kpi ${low.length?"orange":"limelt"}"><div class="blob"></div><div class="ic">!</div><div class="kb"><div class="v num">${low.length}</div><div class="l">${low.length?"부족 품목 · "+esc(low.map(i=>i.name).join(", ")):"부족 품목 없음"}</div></div></div>
+    <div class="kpi peach"><div class="blob"></div><div class="ic">${flab(sel).replace("F","")}</div><div class="kb"><div class="v num">${selTotal}</div><div class="l">${sel} 보유 · ${floorKinds[sel]}종 · 전체의 ${total?Math.round(selTotal/total*100):0}%</div></div></div>
+    <div class="kpi ${unplaced.length?"orange":"limelt"} ${unplaced.length?"clickable":""}" id="kpiUnplaced" title="눌러서 위치 정하기"><div class="blob"></div><div class="ic">📍</div><div class="kb"><div class="v num">${unplaced.length}</div><div class="l">${unplaced.length?"미배치 비품 · 눌러서 위치 정하기":"미배치 비품 없음"}</div></div></div>
+    <div class="kpi lime"><div class="blob"></div><div class="ic">🚧</div><div class="kb"><div class="v num">${bollard.qty}</div><div class="l">이동 가능 차단봉${bollard.item?` · ${esc(short(BOLLARD_SPACE))}`:" · 차단봉 미등록"}</div></div></div>`;
   // 미배치 비품 패널
   const up=$("#unplacedPanel");
   if(unplaced.length){ up.hidden=false; up.innerHTML=`<div class="ph"><h2>📍 미배치 비품 ${unplaced.length}종</h2><span class="msg">등록만 되고 위치·수량이 없는 비품입니다. 눌러서 입고 위치를 정하세요.</span></div><div class="fchips">${unplaced.map(i=>`<button type="button" class="sbtn" data-place="${esc(i.id)}">${esc(i.name)}<b>${esc(i.id)}</b></button>`).join("")}</div>`;
