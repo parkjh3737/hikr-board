@@ -222,8 +222,9 @@ function getOps(ym) {
     const rb = SpreadsheetApp.openById(ROSTER_SS_ID);
     const tabs = rb.getSheets();
     const find = re => tabs.find(sh => re.test(sh.getName()));
-    parseRoster(find(new RegExp('^\\s*' + m + '월\\s*근무표')), y, m, '하픽', out.roster);
-    parseRoster(find(new RegExp('^\\s*' + m + '월\\s*매니')), y, m, '매니저', out.roster);
+    const rtz = rb.getSpreadsheetTimeZone() || TZ;
+    parseRoster(find(new RegExp('^\\s*' + m + '월\\s*근무표')), y, m, '하픽', out.roster, rtz);
+    parseRoster(find(new RegExp('^\\s*' + m + '월\\s*매니')), y, m, '매니저', out.roster, rtz);
     out.rosterUrl = rb.getUrl();
   } catch (e) { out.rosterError = String(e && e.message || e); }
   return out;
@@ -232,18 +233,20 @@ function getOps(ym) {
 /* =============== 근무표 (※ 2026년 하이커그라운드 근무표) =============== */
 const ROSTER_SS_ID = '1vy4MYOCbEkp_KE0vGlVH-AsanGGqITjKwDC6Vg-zhWc';
 /** 근무표 탭(주차 블록 반복: '근무자명' 헤더 → 날짜 행 → 직원 행)을 읽어 out[date] = [{name, code, role}] 로 채움 */
-function parseRoster(sheet, year, tabMonth, role, out) {
-  if (!sheet) return;
+function parseRoster(sheet, year, tabMonth, role, out, tz) {
+  if (!sheet) return; tz = tz || TZ;
   const vals = sheet.getDataRange().getValues();
   for (let i = 0; i < vals.length; i++) {
     if (String(vals[i][0] || '').trim() !== '근무자명') continue;
     const dateRow = vals[i + 1] || [];
     const cols = [];
     for (let c = 1; c < dateRow.length; c++) {
-      const mt = /(\d+)\s*월\s*(\d+)\s*일/.exec(String(dateRow[c] || '')); if (!mt) continue;
-      const mm = Number(mt[1]); let yy = year;
+      const cell = dateRow[c]; let mm, dd;
+      if (cell instanceof Date && !isNaN(cell)) { mm = Number(Utilities.formatDate(cell, tz, 'M')); dd = Number(Utilities.formatDate(cell, tz, 'd')); }
+      else { const mt = /(\d+)\s*월\s*(\d+)\s*일/.exec(String(cell || '')); if (!mt) continue; mm = Number(mt[1]); dd = Number(mt[2]); }
+      let yy = year;
       if (tabMonth === 1 && mm === 12) yy = year - 1; else if (tabMonth === 12 && mm === 1) yy = year + 1;
-      cols.push([c, ymd(yy, mm, Number(mt[2]))]);
+      cols.push([c, ymd(yy, mm, dd)]);
     }
     for (let r = i + 2; r < vals.length; r++) {
       const name = String(vals[r][0] || '').trim();
