@@ -256,6 +256,113 @@ function parseRoster(sheet, year, tabMonth, role, out, tz) {
   }
 }
 
+
+/* =============== 엑셀 내보내기 (서버) =============== */
+const EXPORT_FOLDER = '하이커 비품대장 내보내기';
+function colL(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+function getOrCreateFolder(name) {
+  const it = DriveApp.getFoldersByName(name);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(name);
+}
+/** 데이터 시트 사본에 현재현황·층별요약·대시보드(수식) 탭을 붙여 xlsx로 변환, 드라이브 폴더에 저장 후 링크 반환 */
+function exportXlsx() {
+  const src = ss();
+  const stamp = Utilities.formatDate(new Date(), sstz(), 'yyyy-MM-dd_HHmm');
+  const name = '하이커그라운드_비품관리대장_' + stamp;
+  const copyFile = DriveApp.getFileById(src.getId()).makeCopy(name);
+  const wb = SpreadsheetApp.openById(copyFile.getId());
+  try {
+    // 기존 계산 탭이 있으면 제거(데이터 탭 4개만 남김)
+    wb.getSheets().forEach(sh => { if (!Object.values(SHEETS).includes(sh.getName())) wb.deleteSheet(sh); });
+    const spaces = rows('spaces').filter(r => r.v[2]).map(r => ({ floor: String(r.v[0]).trim(), name: String(r.v[2]).trim() }));
+    const sp = spaces.filter(s => s.floor && s.floor !== '-');
+    const floors = []; sp.forEach(s => { if (!floors.includes(s.floor)) floors.push(s.floor); });
+    const N = sp.length, NF = floors.length;
+    const nItems = Math.max(rows('items').length, 1);
+    const NR = nItems + 20;                    // 여유 행
+    const cT = 3 + N, cD = cT + 1, cM = cT + 2, cS = cT + 3, TOT = 5 + NR;
+    const first = colL(3), last = colL(2 + N);
+
+    // ---- 현재현황 ----
+    const s5 = wb.insertSheet('현재현황');
+    s5.getRange(1, 1).setValue('공간별 현재 수량 (자동 계산: 초기배치 + 도착 이동 − 출발 이동, 적용=O 만 반영)').setFontWeight('bold');
+    s5.getRange(3, 3, 1, N).setValues([sp.map(s => s.floor)]).setFontWeight('bold').setHorizontalAlignment('center');
+    s5.getRange(4, 1, 1, cS).setValues([['비품ID', '품명', ...sp.map(s => s.name), '현재 총보유', '폐기 누계', '최소보유', '상태']]).setFontWeight('bold').setBackground('#1F3A5F').setFontColor('#FFFFFF').setWrap(true);
+    const f5 = [];
+    for (let k = 0; k < NR; k++) {
+      const r = 5 + k; const row = [];
+      row.push(`=IF(비품목록!A${r - 3}="","",비품목록!A${r - 3})`);
+      row.push(`=IF($A${r}="","",IFERROR(INDEX(비품목록!$B:$B,MATCH($A${r},비품목록!$A:$A,0)),""))`);
+      sp.forEach((s, j) => { const c = colL(3 + j);
+        row.push(`=IF($A${r}="","",SUMIFS(초기배치!$E:$E,초기배치!$B:$B,$A${r},초기배치!$D:$D,${c}$4)+SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,${c}$4,이동기록!$I:$I,"O")-SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$D:$D,${c}$4,이동기록!$I:$I,"O"))`); });
+      row.push(`=IF($A${r}="","",SUM(${first}${r}:${last}${r}))`);
+      row.push(`=IF($A${r}="","",SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,"폐기",이동기록!$I:$I,"O"))`);
+      row.push(`=IF($A${r}="","",IFERROR(INDEX(비품목록!$F:$F,MATCH($A${r},비품목록!$A:$A,0)),0))`);
+      row.push(`=IF($A${r}="","",IF(${colL(cT)}${r}<${colL(cM)}${r},"부족","정상"))`);
+      f5.push(row);
+    }
+    s5.getRange(5, 1, NR, cS).setFormulas(f5);
+    const tot5 = ['', '공간 합계']; for (let j = 3; j <= cD; j++) tot5.push(`=SUM(${colL(j)}5:${colL(j)}${TOT - 1})`); tot5.push('', '');
+    s5.getRange(TOT, 1, 1, cS).setFormulas([tot5.map(v => v || '')]).setFontWeight('bold').setBackground('#D9E2F3');
+    s5.setFrozenRows(4); s5.setFrozenColumns(2);
+    s5.setColumnWidth(2, 140); for (let j = 3; j <= cS; j++) s5.setColumnWidth(j, 90);
+    const cfState = SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('부족').setBackground('#F8CBAD').setFontColor('#9C0006').setRanges([s5.getRange(5, cS, NR, 1)]).build();
+    const cfPos = SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(0).setBackground('#E2EFDA').setRanges([s5.getRange(5, 3, NR, N)]).build();
+    const cfNeg = SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(0).setBackground('#FF9999').setRanges([s5.getRange(5, 3, NR, N)]).build();
+    s5.setConditionalFormatRules([cfState, cfPos, cfNeg]);
+
+    // ---- 층별요약 ----
+    const s6 = wb.insertSheet('층별요약');
+    s6.getRange(1, 1).setValue('층별 비품 현황 (자동 계산)').setFontWeight('bold');
+    s6.getRange(3, 1, 1, 6 + NF).setValues([['비품ID', '품명', '분류', ...floors, '현재 총보유', '최소보유', '상태']]).setFontWeight('bold').setBackground('#1F3A5F').setFontColor('#FFFFFF');
+    const f6 = [];
+    for (let k = 0; k < NR; k++) {
+      const r = 4 + k, src = r + 1; const row = [];
+      row.push(`=현재현황!A${src}`, `=현재현황!B${src}`, `=IF($A${r}="","",IFERROR(INDEX(비품목록!$C:$C,MATCH($A${r},비품목록!$A:$A,0)),""))`);
+      floors.forEach((f, i) => row.push(`=IF($A${r}="","",SUMIF(현재현황!$${first}$3:$${last}$3,${colL(4 + i)}$3,현재현황!$${first}${src}:$${last}${src}))`));
+      row.push(`=IF($A${r}="","",SUM(D${r}:${colL(3 + NF)}${r}))`, `=현재현황!${colL(cM)}${src}`, `=현재현황!${colL(cS)}${src}`);
+      f6.push(row);
+    }
+    s6.getRange(4, 1, NR, 6 + NF).setFormulas(f6);
+    const T6 = 4 + NR; const tot6 = ['', '층 합계', '']; for (let j = 4; j <= 4 + NF; j++) tot6.push(`=SUM(${colL(j)}4:${colL(j)}${T6 - 1})`); tot6.push('', '');
+    s6.getRange(T6, 1, 1, 6 + NF).setFormulas([tot6.map(v => v || '')]).setFontWeight('bold').setBackground('#D9E2F3');
+    s6.setFrozenRows(3); s6.setColumnWidth(2, 140);
+    s6.setConditionalFormatRules([SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('부족').setBackground('#F8CBAD').setFontColor('#9C0006').setRanges([s6.getRange(4, 6 + NF, NR, 1)]).build()]);
+
+    // ---- 대시보드 ----
+    const s7 = wb.insertSheet('대시보드');
+    s7.getRange(1, 1).setValue('하이커그라운드 비품 대시보드 (' + stamp.replace('_', ' ') + ' 기준)').setFontWeight('bold').setFontSize(14);
+    s7.getRange(2, 1).setValue('모든 값은 자동 계산됩니다. 입력은 비품목록 · 초기배치 · 이동기록 시트에서만 하세요.').setFontColor('#7F7F7F');
+    const kp = [['등록 비품 종류', `=COUNTA(비품목록!A2:A${NR + 1})`], ['전체 보유 수량', `=현재현황!${colL(cT)}${TOT}`], ['부족 품목 수', `=COUNTIF(현재현황!${colL(cS)}5:${colL(cS)}${TOT - 1},"부족")`], ['누적 이동 건수(적용)', `=COUNTIF(이동기록!I2:I1000,"O")`]];
+    s7.getRange(4, 1, kp.length, 1).setValues(kp.map(k => [k[0]])).setFontWeight('bold');
+    s7.getRange(4, 2, kp.length, 1).setFormulas(kp.map(k => [k[1]]));
+    const fr = 4 + kp.length + 1;
+    s7.getRange(fr, 1, 1, 3).setValues([['층', '총 수량', '비중']]).setFontWeight('bold').setBackground('#1F3A5F').setFontColor('#FFFFFF');
+    const ft = floors.map((f, i) => [f, `=층별요약!${colL(4 + i)}${T6}`, `=IF($B$${fr + NF + 1}=0,0,B${fr + 1 + i}/$B$${fr + NF + 1})`]);
+    s7.getRange(fr + 1, 1, NF, 1).setValues(ft.map(x => [x[0]]));
+    s7.getRange(fr + 1, 2, NF, 2).setFormulas(ft.map(x => [x[1], x[2]]));
+    s7.getRange(fr + NF + 1, 1, 1, 3).setFormulas([['합계', `=SUM(B${fr + 1}:B${fr + NF})`, `=SUM(C${fr + 1}:C${fr + NF})`]]).setFontWeight('bold').setBackground('#D9E2F3');
+    s7.getRange(fr + 1, 3, NF + 1, 1).setNumberFormat('0.0%');
+    const sr = fr + NF + 3;
+    s7.getRange(sr, 1, 1, 3).setValues([['층', '공간', '총 수량']]).setFontWeight('bold').setBackground('#1F3A5F').setFontColor('#FFFFFF');
+    s7.getRange(sr + 1, 1, N, 2).setValues(sp.map(s => [s.floor, s.name]));
+    s7.getRange(sr + 1, 3, N, 1).setFormulas(sp.map((s, j) => [`=현재현황!${colL(3 + j)}${TOT}`]));
+    s7.setColumnWidth(1, 160); s7.setColumnWidth(2, 180);
+    SpreadsheetApp.flush();
+
+    // ---- xlsx 변환 → 드라이브 폴더 저장 ----
+    const url = 'https://docs.google.com/spreadsheets/d/' + wb.getId() + '/export?format=xlsx';
+    const res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) throw new Error('xlsx 변환 실패 (HTTP ' + res.getResponseCode() + ')');
+    const folder = getOrCreateFolder(EXPORT_FOLDER);
+    const file = folder.createFile(res.getBlob().setName(name + '.xlsx'));
+    try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+    return { ok: true, name: name + '.xlsx', url: 'https://drive.google.com/uc?export=download&id=' + file.getId(), viewUrl: file.getUrl(), folderUrl: folder.getUrl(), size: res.getBlob().getBytes().length };
+  } finally {
+    try { copyFile.setTrashed(true); } catch (e) {}
+  }
+}
+
 /** 처음 설치 시 빈 시트에 탭·헤더·기본 공간을 만드는 함수 (Apps Script 편집기에서 1회 실행) */
 function setupSheets() {
   const spec = {

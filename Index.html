@@ -350,7 +350,7 @@ details+details{margin-top:8px}
       </form>
       <div class="actions">
         <button class="btn primary" id="addMove" type="button">이동 기록 저장</button>
-        <button class="btn lime" id="exportXlsx" type="button">⬇ 엑셀로 저장</button>
+        <button class="btn lime" id="exportXlsx" type="button" title="서버에서 수식 포함 엑셀을 만들어 드라이브에 저장하고 내려받습니다">⬇ 엑셀로 저장</button>
       </div>
       <div class="msg" id="formMsg" style="margin-top:8px"></div>
     </section>
@@ -740,16 +740,31 @@ function buildWorkbook(){
   add("대시보드",d,[22,22,10]);
   return wb;
 }
-$("#exportXlsx").onclick=()=>{
+$("#exportXlsx").onclick=async()=>{
+  const btn=$("#exportXlsx"); if(btn.disabled) return;
+  if(hasGS){
+    btn.disabled=true; const orig=btn.textContent; btn.textContent="서버에서 엑셀 생성 중… (10~20초)"; setMsg("#formMsg","서버에서 엑셀 파일을 만들고 있습니다. 잠시만 기다려 주세요.");
+    try{
+      const r=await call("exportXlsx");
+      const a=document.createElement("a"); a.href=r.url; a.target="_blank"; a.rel="noopener"; document.body.appendChild(a); a.click(); a.remove();
+      $("#formMsg").innerHTML=`<span class="msg">✓ ${esc(r.name)} 생성 완료 — 다운로드가 시작되지 않으면 <a href="${esc(r.url)}" target="_blank" rel="noopener">여기</a>를 누르세요 · <a href="${esc(r.folderUrl)}" target="_blank" rel="noopener">내보내기 폴더 열기 ↗</a></span>`;
+      toast("엑셀 파일이 드라이브에 저장되고 다운로드됩니다.");
+      btn.textContent="✓ 생성됨"; setTimeout(()=>btn.textContent=orig,2000);
+    }catch(e){ setMsg("#formMsg","서버 생성 실패: "+e.message+" — 브라우저에서 바로 만든 파일로 대신 저장합니다.",true); btn.textContent=orig; localExport(); }
+    btn.disabled=false; return;
+  }
+  localExport();
+};
+function localExport(){
   try{
     const out=XLSX.write(buildWorkbook(),{type:"array",bookType:"xlsx",cellDates:true});
     const blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     const fn=`하이커그라운드_층별_비품관리대장_${today()}.xlsx`;
     const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=fn; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),10000);
-    setMsg("#formMsg","엑셀 파일을 내려받았습니다 (수식 포함). 다운로드가 안 보이면 브라우저의 팝업/다운로드 차단을 확인하세요.");
+    setMsg("#formMsg","엑셀 파일을 내려받았습니다 (수식 포함).");
   }catch(e){ setMsg("#formMsg","저장 실패: "+e.message,true) }
-};
+}
 function tick(){const d=new Date();$("#clock").textContent=d.toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})+" · "+d.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",hour12:false})}
 tick(); setInterval(tick,30000);
 render();
