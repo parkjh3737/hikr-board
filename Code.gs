@@ -216,7 +216,41 @@ function getOps(ym) {
       if (f.some(v => v) || total) out.counts[ymd(y, m, Number(mt[1]))] = { floors: f, total, note: String(row[7] || '').trim() };
     });
   }
+  // --- 근무표: N월 근무표 + N월 매니져 스케줄 ---
+  out.roster = {};
+  try {
+    const rb = SpreadsheetApp.openById(ROSTER_SS_ID);
+    const tabs = rb.getSheets();
+    const find = re => tabs.find(sh => re.test(sh.getName()));
+    parseRoster(find(new RegExp('^\\s*' + m + '월\\s*근무표')), y, m, '하픽', out.roster);
+    parseRoster(find(new RegExp('^\\s*' + m + '월\\s*매니')), y, m, '매니저', out.roster);
+    out.rosterUrl = rb.getUrl();
+  } catch (e) { out.rosterError = String(e && e.message || e); }
   return out;
+}
+
+/* =============== 근무표 (※ 2026년 하이커그라운드 근무표) =============== */
+const ROSTER_SS_ID = '1vy4MYOCbEkp_KE0vGlVH-AsanGGqITjKwDC6Vg-zhWc';
+/** 근무표 탭(주차 블록 반복: '근무자명' 헤더 → 날짜 행 → 직원 행)을 읽어 out[date] = [{name, code, role}] 로 채움 */
+function parseRoster(sheet, year, tabMonth, role, out) {
+  if (!sheet) return;
+  const vals = sheet.getDataRange().getValues();
+  for (let i = 0; i < vals.length; i++) {
+    if (String(vals[i][0] || '').trim() !== '근무자명') continue;
+    const dateRow = vals[i + 1] || [];
+    const cols = [];
+    for (let c = 1; c < dateRow.length; c++) {
+      const mt = /(\d+)\s*월\s*(\d+)\s*일/.exec(String(dateRow[c] || '')); if (!mt) continue;
+      const mm = Number(mt[1]); let yy = year;
+      if (tabMonth === 1 && mm === 12) yy = year - 1; else if (tabMonth === 12 && mm === 1) yy = year + 1;
+      cols.push([c, ymd(yy, mm, Number(mt[2]))]);
+    }
+    for (let r = i + 2; r < vals.length; r++) {
+      const name = String(vals[r][0] || '').trim();
+      if (!name || name === '근무자명' || /근무\s*인원/.test(name)) break;
+      cols.forEach(([c, d]) => { const code = String(vals[r][c] || '').trim(); (out[d] = out[d] || []).push({ name, code, role }); });
+    }
+  }
 }
 
 /** 처음 설치 시 빈 시트에 탭·헤더·기본 공간을 만드는 함수 (Apps Script 편집기에서 1회 실행) */

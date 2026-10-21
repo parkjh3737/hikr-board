@@ -188,6 +188,21 @@ details+details{margin-top:8px}
 .cnt{display:flex;gap:6px;align-items:flex-end;height:60px;margin-top:6px}
 .cnt div{flex:1;display:grid;justify-items:center;gap:2px;font-size:11px;color:var(--fg-2)}
 .cnt b{display:block;width:100%;background:var(--accent,var(--lime));border-radius:6px 6px 0 0;min-height:3px}
+.rblock{margin-bottom:12px}
+.roster{display:grid;gap:5px;background:var(--panel-2);border-radius:14px;padding:10px 12px}
+.rrow{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:start}
+.rrow .rl{font-size:11px;font-weight:700;color:var(--fg-2);padding-top:4px}
+.rrow>div{display:flex;flex-wrap:wrap;gap:4px}
+.pchip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;background:var(--panel);border:1px solid var(--line)}
+.pchip small{font-weight:600;font-size:10px;opacity:.75}
+.pchip.m{background:var(--ink);color:var(--ink-ink);border-color:var(--ink)}
+.pchip.o{background:var(--lime);color:#121212;border-color:transparent}
+.pchip.c{background:var(--f5);border-color:transparent}
+.pchip.f{background:var(--orange);color:#121212;border-color:transparent}
+.pchip.e{background:var(--orange-2);border-color:transparent}
+.pchip.x,.pchip.r{opacity:.55;font-weight:500}
+.dbtn .dp{font-size:10px;color:var(--fg-2);font-weight:700;min-height:12px}
+.dbtn[aria-selected="true"] .dp{color:var(--ink-ink);opacity:.8}
 .agenda{display:grid;gap:4px}
 .agenda .row{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer}
 .agenda .row:hover{background:var(--panel-2)}
@@ -611,6 +626,17 @@ const opsCache={}; let selDate=today(); let viewYM=today().slice(0,7); let opsLo
 const DOW=["일","월","화","수","목","금","토"];
 const addDays=(s,n)=>{const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+n);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 const dow=s=>new Date(s+"T00:00:00").getDay();
+const OFF_RE=/^(연차|대휴|휴관|휴무|병가|공가|OFF)/i;
+function rosterGroups(list){
+  const g={mgr:[],open:[],close:[],full:[],etc:[],off:[],rest:[]};
+  (list||[]).forEach(p=>{const c=p.code; const tag={...p};
+    if(p.role==="매니저"){ if(c&&c!=="휴관") g.mgr.push(tag); else if(c==="휴관") g.off.push(tag); else g.rest.push(tag); return; }
+    if(!c) g.rest.push(tag); else if(c==="오") g.open.push(tag); else if(c==="마") g.close.push(tag); else if(c==="풀") g.full.push(tag);
+    else if(OFF_RE.test(c)) g.off.push(tag); else g.etc.push(tag); });
+  g.working=g.mgr.filter(p=>!OFF_RE.test(p.code)).length+g.open.length+g.close.length+g.full.length+g.etc.length;
+  return g;
+}
+const chip=(p,cls)=>`<span class="pchip ${cls}">${esc(p.name)}${p.code&&!["오","마","풀"].includes(p.code)?`<small>${esc(p.code)}</small>`:""}</span>`;
 const catClass=c=>/도슨트/.test(c)?"c-docent":/팝업|이벤트|대관/.test(c)?"c-event":/프로그램/.test(c)?"c-prog":"c-etc";
 async function loadOps(force){
   if(!hasGS){ $("#schedMsg").textContent="스케줄은 배포된 보드(구글 시트 연동)에서만 표시됩니다."; return }
@@ -629,7 +655,8 @@ function renderSched(){
   const td=today();
   $("#daystrip").innerHTML=Array.from({length:7},(_,i)=>{const d=addDays(mon,i); const list=ev(d); const dl=o&&o.daily[d];
     const dots=[...new Set(list.map(e=>catClass(e.cat)))].slice(0,3).map(c=>`<i class="${c}"></i>`).join("")+(dl?'<i class="c-note"></i>':"");
-    return `<button class="dbtn ${d===td?"today":""} ${dow(d)===1?"closed":""} ${d.slice(0,7)!==viewYM?"other":""}" aria-selected="${d===selDate}" data-d="${d}"><span class="dw">${DOW[dow(d)]}</span><span class="dn">${Number(d.slice(8))}</span><span class="dc">${dots}</span></button>`}).join("");
+    const rg=o&&o.roster&&o.roster[d]?rosterGroups(o.roster[d]):null;
+    return `<button class="dbtn ${d===td?"today":""} ${dow(d)===1?"closed":""} ${d.slice(0,7)!==viewYM?"other":""}" aria-selected="${d===selDate}" data-d="${d}"><span class="dw">${DOW[dow(d)]}</span><span class="dn">${Number(d.slice(8))}</span><span class="dc">${dots}</span><span class="dp">${rg?`👤${rg.working}`:""}</span></button>`}).join("");
   $("#daystrip").querySelectorAll(".dbtn").forEach(b=>b.onclick=()=>{selDate=b.dataset.d; const ym=selDate.slice(0,7); if(ym!==viewYM){viewYM=ym; loadOps(); return} renderSched()});
   // 선택일 상세
   const list=ev(selDate), dl=o&&o.daily[selDate], ct=o&&o.counts[selDate];
@@ -639,7 +666,19 @@ function renderSched(){
   const dlHtml=dl?[["운영",dl.ops],["시설",dl.facility],["전달사항",dl.notice],["특이사항",dl.special]].filter(([,v])=>v).map(([k,v])=>`<div class="ev"><span class="cat c-note">${k}</span><span class="tx">${esc(v)}</span></div>`).join(""):`<div class="msg">데일리 기록 없음</div>`;
   const mx=ct?Math.max(1,...ct.floors):1;
   const ctHtml=ct?`<div class="cnt">${ct.floors.map((v,i)=>`<div><span class="num" style="color:var(--fg)">${v}</span><b style="height:${Math.round(v/mx*40)+3}px"></b><span>${i+1}층</span></div>`).join("")}</div><div class="msg" style="margin-top:4px">전자계수 ${ct.total}${ct.note?" · "+esc(ct.note):""}</div>`:`<div class="msg">계수 기록 없음</div>`;
-  $("#dayDetail").innerHTML=`<div class="ph"><h2>${label}</h2><span class="msg">${o?`${list.length}건 일정`:""}</span></div>
+  const rl=o&&o.roster&&o.roster[selDate]; const rg=rl?rosterGroups(rl):null;
+  const rosterHtml=!o?"":!rl?`<div class="msg">${o.rosterError?"근무표를 불러오지 못했습니다: "+esc(o.rosterError):"이 날짜의 근무표가 없습니다"}</div>`:
+    `<div class="roster">
+      ${rg.mgr.length?`<div class="rrow"><span class="rl">매니저</span><div>${rg.mgr.map(p=>chip(p,"m")).join("")}</div></div>`:""}
+      <div class="rrow"><span class="rl">오픈</span><div>${rg.open.map(p=>chip(p,"o")).join("")||'<span class="msg">-</span>'}</div></div>
+      <div class="rrow"><span class="rl">마감</span><div>${rg.close.map(p=>chip(p,"c")).join("")||'<span class="msg">-</span>'}</div></div>
+      ${rg.full.length?`<div class="rrow"><span class="rl">풀</span><div>${rg.full.map(p=>chip(p,"f")).join("")}</div></div>`:""}
+      ${rg.etc.length?`<div class="rrow"><span class="rl">반차·기타</span><div>${rg.etc.map(p=>chip(p,"e")).join("")}</div></div>`:""}
+      ${rg.off.length?`<div class="rrow"><span class="rl">연차·대휴</span><div>${rg.off.map(p=>chip(p,"x")).join("")}</div></div>`:""}
+      ${rg.rest.length?`<div class="rrow"><span class="rl">휴무</span><div>${rg.rest.map(p=>chip(p,"r")).join("")}</div></div>`:""}
+    </div>`;
+  $("#dayDetail").innerHTML=`<div class="ph"><h2>${label}</h2><span class="msg">${o?`${list.length}건 일정${rg?` · 근무 ${rg.working}명`:""}`:""}</span></div>
+    <div class="rblock"><div class="eyebrow" style="margin-bottom:6px">근무자 ${o&&o.rosterUrl?`<a class="msg" href="${esc(o.rosterUrl)}" target="_blank" rel="noopener" style="font-weight:500;text-transform:none;letter-spacing:0">근무표 시트 ↗</a>`:""}</div>${rosterHtml}</div>
     <div class="daygrid">
       <div><div class="eyebrow" style="margin-bottom:6px">팝업 · 이벤트 · 도슨트</div><div class="evlist">${evHtml}</div></div>
       <div><div class="eyebrow" style="margin-bottom:6px">데일리 (운영·시설·전달)</div><div class="evlist">${dlHtml}</div>
