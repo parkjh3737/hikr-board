@@ -385,6 +385,17 @@ details+details{margin-top:8px}
         </form>
         <div class="actions"><button class="btn primary" id="addStock" type="button">입고 저장</button></div>
       </details>
+      <details id="removeBox" style="margin-top:8px"><summary>⬆ 수량 차감 (폐기 · 입력 오류 정정 · 분실)</summary>
+        <form id="removeForm" class="form" style="margin-top:8px">
+          <label>차감일<input type="date" id="rDate" required></label>
+          <label>공간<select id="rSpace" required></select></label>
+          <label>비품 (이 공간에 있는 것만)<select id="rItem" required></select></label>
+          <label>수량 <span class="msg" id="rHave"></span><input type="number" id="rQty" min="1" value="1" required></label>
+          <label>사유<select id="rReason"><option>폐기</option><option value="정정">입력 오류 정정</option><option>분실</option><option>기타</option></select></label>
+          <label style="grid-column:1/-1">비고<input type="text" id="rNote" placeholder="예: 파손으로 폐기 / 10/20 입고 수량 잘못 입력"></label>
+        </form>
+        <div class="actions"><button class="btn primary" id="removeStock" type="button" style="background:#b42318">차감 저장</button></div>
+      </details>
       <div class="msg" id="regMsg" style="margin-top:8px"></div>
     </section>
   </aside>
@@ -466,6 +477,21 @@ function updateMoveMax(){
   const have=id?((stock[id]||{})[from]||0):0; const q=$("#mQty");
   q.max=have||1; if(Number(q.value)>have) q.value=have||1; if(Number(q.value)<1) q.value=1;
   $("#mHave").textContent=id?`(보유 ${have}개)`:""; $("#addMove").disabled=!id||have<=0;
+}
+// 수량 차감: 선택 공간에 실제 있는 비품만, 보유 수량까지만
+function fillRemoveItems(){
+  const {stock}=compute(); const nameOf=nameOfAll();
+  const sp=$("#rSpace").value; const prev=$("#rItem").value;
+  const here=data.items.map(i=>[i.id,(stock[i.id]||{})[sp]||0]).filter(([,q])=>q>0);
+  $("#rItem").innerHTML=here.map(([id,q])=>`<option value="${esc(id)}">${esc(nameOf[id])} (${q}개)</option>`).join("")||`<option value="">이 공간에 비품 없음</option>`;
+  if(here.some(([id])=>id===prev)) $("#rItem").value=prev;
+  updateRemoveMax();
+}
+function updateRemoveMax(){
+  const {stock}=compute(); const sp=$("#rSpace").value, id=$("#rItem").value;
+  const have=id?((stock[id]||{})[sp]||0):0; const q=$("#rQty");
+  q.max=have||1; if(Number(q.value)>have) q.value=have||1; if(Number(q.value)<1) q.value=1;
+  $("#rHave").textContent=id?`(보유 ${have}개)`:""; $("#removeStock").disabled=!id||have<=0;
 }
 function render(){
   const {stock,perItem}=compute();
@@ -560,12 +586,12 @@ function render(){
 
   const opt=(arr,f)=>arr.map(v=>`<option value="${esc(v)}">${esc(f?f(v):v)}</option>`).join("");
   const keep=id=>{const el=$(id);const v=el.value;return ()=>{if([...el.options].some(o=>o.value===v)) el.value=v}};
-  const ks=["#mItem","#mFrom","#mTo","#sItem","#sSpace"].map(keep);
+  const ks=["#mItem","#mFrom","#mTo","#sItem","#sSpace","#rSpace","#rItem"].map(keep);
   $("#sItem").innerHTML=opt(data.items.map(i=>i.id),id=>`${id} ${nameOf[id]}`);
-  $("#mFrom").innerHTML=$("#sSpace").innerHTML=opt(data.spaces.filter(s=>s.name!=="폐기").map(s=>s.name));
+  $("#mFrom").innerHTML=$("#sSpace").innerHTML=$("#rSpace").innerHTML=opt(data.spaces.filter(s=>s.name!=="폐기").map(s=>s.name));
   $("#mTo").innerHTML=opt(data.spaces.map(s=>s.name));
   ks.forEach(k=>k());
-  fillMoveItems();
+  fillMoveItems(); fillRemoveItems();
   // 비품ID 번호 선택: 사용 중인 번호는 제외, 기본값은 다음 번호
   const used=new Set(data.items.map(i=>i.id)); const sel0=$("#iNum"); const prev=sel0.value;
   let maxN=0; data.items.forEach(i=>{const m=/^E(\d+)$/.exec(i.id); if(m) maxN=Math.max(maxN,Number(m[1]))});
@@ -580,8 +606,18 @@ async function delMove(row,btn){
 }
 
 // ---------- 입력 ----------
-$("#mDate").value=$("#sDate").value=today();
+$("#mDate").value=$("#sDate").value=$("#rDate").value=today();
 $("#mFrom").onchange=fillMoveItems; $("#mItem").onchange=updateMoveMax; $("#mQty").oninput=updateMoveMax;
+$("#rSpace").onchange=fillRemoveItems; $("#rItem").onchange=updateRemoveMax; $("#rQty").oninput=updateRemoveMax;
+$("#removeStock").onclick=async()=>{
+  if(!$("#removeForm").reportValidity()) return;
+  const r={date:$("#rDate").value,id:$("#rItem").value,space:$("#rSpace").value,qty:Number($("#rQty").value),reason:$("#rReason").value,note:$("#rNote").value.trim()};
+  if(!r.id){ setMsg("#regMsg","이 공간에는 차감할 비품이 없습니다.",true); return }
+  const have=((compute().stock[r.id]||{})[r.space]||0);
+  if(r.qty>have){ setMsg("#regMsg",`${short(r.space)}에 ${nameOfAll()[r.id]||r.id}은(는) ${have}개뿐입니다.`,true); return }
+  const ok=await mutate("removeStock",[r],`${short(r.space)}의 ${nameOfAll()[r.id]||r.id} ${r.qty}개 차감(${r.reason}) 저장.`,"#regMsg",$("#removeStock"));
+  if(ok){ $("#rQty").value=1; $("#rNote").value=""; }
+};
 try{ $("#whoName").value=localStorage.getItem("hikr_who")||"" }catch(e){}
 $("#whoName").onchange=e=>{try{localStorage.setItem("hikr_who",e.target.value.trim())}catch(err){}};
 $("#addMove").onclick=async()=>{
@@ -721,7 +757,7 @@ function buildWorkbook(){
     sp.forEach((s,j)=>{const c=col(3+j); const v=it?((stock[it.id]||{})[s.name]||0):0; tot+=v;
       row.push({t:"n",v,f:`IF($A${r}="","",SUMIFS(초기배치!$E:$E,초기배치!$B:$B,$A${r},초기배치!$D:$D,${c}$4)+SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,${c}$4,이동기록!$I:$I,"O")-SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$D:$D,${c}$4,이동기록!$I:$I,"O"))`})});
     row.push({t:"n",v:tot,f:`IF($A${r}="","",SUM(C${r}:${col(2+N)}${r}))`});
-    row.push({t:"n",v:0,f:`IF($A${r}="","",SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,"폐기",이동기록!$I:$I,"O"))`});
+    row.push({t:"n",v:0,f:`IF($A${r}="","",SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,"폐기",이동기록!$I:$I,"O")-SUMIFS(초기배치!$E:$E,초기배치!$B:$B,$A${r},초기배치!$F:$F,"폐기"))`});
     row.push({t:"n",v:it?it.min||0:0,f:`IF($A${r}="","",IFERROR(INDEX(비품목록!$F:$F,MATCH($A${r},비품목록!$A:$A,0)),0))`});
     row.push({t:"s",v:it?(tot<(it.min||0)?"부족":"정상"):"",f:`IF($A${r}="","",IF(${col(cT)}${r}<${col(cM)}${r},"부족","정상"))`});
     aoa.push(row);

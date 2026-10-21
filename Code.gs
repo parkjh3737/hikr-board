@@ -136,6 +136,24 @@ function addStock(r) {
   });
 }
 
+/** 수량 차감 (폐기·입력 오류 정정·분실): 초기배치 탭에 음수 수량 행으로 기록 */
+function removeStock(r) {
+  return withLock(() => {
+    if (!r || !r.id || !r.space) throw new Error('비품과 공간이 필요합니다.');
+    if (!itemExists(r.id)) throw new Error('등록되지 않은 비품ID: ' + r.id);
+    if (!spaceExists(r.space)) throw new Error('공간목록에 없는 공간입니다.');
+    const qty = Number(r.qty); if (!(qty > 0)) throw new Error('수량은 1 이상이어야 합니다.');
+    const have = stockAt(r.id, r.space);
+    if (qty > have) throw new Error(r.space + '에 ' + r.id + '은(는) ' + have + '개뿐입니다. ' + have + ' 이하로 입력하세요.');
+    const reason = String(r.reason || '정정').trim();
+    const s = sh('init'); const row = s.getLastRow() + 1;
+    s.getRange(row, 1, 1, 7).setValues([[toDate(r.date), r.id, '', r.space, -qty, reason, '[차감] ' + (r.note || '')]]);
+    s.getRange(row, 1).setNumberFormat('yyyy-mm-dd');
+    s.getRange(row, 3).setFormula(nameFormula(row));
+    return getData();
+  });
+}
+
 /** 신규 비품 등록 */
 function addItem(it) {
   return withLock(() => {
@@ -296,7 +314,7 @@ function exportXlsx() {
       sp.forEach((s, j) => { const c = colL(3 + j);
         row.push(`=IF($A${r}="","",SUMIFS(초기배치!$E:$E,초기배치!$B:$B,$A${r},초기배치!$D:$D,${c}$4)+SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,${c}$4,이동기록!$I:$I,"O")-SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$D:$D,${c}$4,이동기록!$I:$I,"O"))`); });
       row.push(`=IF($A${r}="","",SUM(${first}${r}:${last}${r}))`);
-      row.push(`=IF($A${r}="","",SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,"폐기",이동기록!$I:$I,"O"))`);
+      row.push(`=IF($A${r}="","",SUMIFS(이동기록!$F:$F,이동기록!$B:$B,$A${r},이동기록!$E:$E,"폐기",이동기록!$I:$I,"O")-SUMIFS(초기배치!$E:$E,초기배치!$B:$B,$A${r},초기배치!$F:$F,"폐기"))`);
       row.push(`=IF($A${r}="","",IFERROR(INDEX(비품목록!$F:$F,MATCH($A${r},비품목록!$A:$A,0)),0))`);
       row.push(`=IF($A${r}="","",IF(${colL(cT)}${r}<${colL(cM)}${r},"부족","정상"))`);
       f5.push(row);
