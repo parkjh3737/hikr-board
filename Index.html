@@ -618,7 +618,7 @@ function placeItem(id){
 $("#refreshBtn").onclick=()=>refresh(false);
 let view="floor"; try{view=localStorage.getItem("hikr_view")||"floor"}catch(e){}
 function setView(v){view=v; $("#floorView").hidden=v!=="floor"; $("#itemView").hidden=v!=="item"; $("#schedView").hidden=v!=="sched"; $("#vFloor").setAttribute("aria-selected",v==="floor"); $("#vItem").setAttribute("aria-selected",v==="item"); $("#vSched").setAttribute("aria-selected",v==="sched"); try{localStorage.setItem("hikr_view",v)}catch(e){} if(v==="sched") loadOps(); }
-$("#vFloor").onclick=()=>setView("floor"); $("#vItem").onclick=()=>setView("item"); $("#vSched").onclick=()=>setView("sched"); setView(view);
+$("#vFloor").onclick=()=>setView("floor"); $("#vItem").onclick=()=>setView("item"); $("#vSched").onclick=()=>setView("sched");
 
 
 // ---------- 운영 스케줄 (캘린더·데일리·계수 시트) ----------
@@ -753,6 +753,7 @@ $("#exportXlsx").onclick=()=>{
 function tick(){const d=new Date();$("#clock").textContent=d.toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})+" · "+d.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",hour12:false})}
 tick(); setInterval(tick,30000);
 render();
+setView(view); // 스케줄 변수들이 정의된 뒤에 복원
 refresh(false);
 setInterval(()=>{ if(!busy&&!editing&&document.visibilityState==="visible") refresh(true) },30000);
 </script>
