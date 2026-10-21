@@ -145,6 +145,14 @@ details summary::before{content:"▸"} details[open] summary::before{content:"�
 details+details{margin-top:8px}
 @media (prefers-reduced-motion:reduce){.floorcard{transition:none}}
 
+/* ---------- 토스트 ---------- */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--ink-ink);border-radius:999px;padding:12px 20px;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:100;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:calc(100% - 32px);text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{background:#2E7D4F;color:#fff} .toast.err{background:#B4322C;color:#fff}
+.toast::before{content:"✓ ";font-size:16px} .toast.err::before{content:"✕ "}
+.flash{animation:flash .9s ease}
+@keyframes flash{0%{box-shadow:0 0 0 0 var(--lime)}50%{box-shadow:0 0 0 6px var(--lime)}100%{box-shadow:0 0 0 0 transparent}}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}.flash{animation:none}}
 /* ---------- 스케줄 ---------- */
 .daystrip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:4px}
 .dbtn{border:0;background:var(--panel-2);border-radius:14px;padding:8px 4px;font:inherit;color:var(--fg);cursor:pointer;display:grid;gap:2px;justify-items:center;min-width:0}
@@ -249,6 +257,7 @@ details+details{margin-top:8px}
     </header>
 
     <div class="banner" id="banner" hidden></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <section class="kpis" id="kpis"></section>
 
@@ -365,7 +374,9 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const SHORT={"1층 웰컴데스크":"웰컴데스크","2층 서브인포":"서브인포","2층 인포 창고":"인포 창고","2층 비품창고":"비품창고","2층 화물엘베 앞":"화물엘베 앞","3층 사무국":"사무국","3층 휴게실":"휴게실","3층 창고":"창고","4층 창고":"창고","4층 시스템실":"시스템실","5층 굿즈샵":"굿즈샵","5층 휴게공간":"휴게공간","지하3층 창고":"창고"};
 const short=n=>SHORT[n]||n;
 const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
-const setMsg=(id,t,err)=>{const el=$(id);el.className="msg"+(err?" err":"");el.textContent=t};
+let toastT=null;
+function toast(t,err){const el=$("#toast"); el.textContent=t; el.className="toast "+(err?"err":"ok")+" show"; clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("show"),err?4000:2500);}
+const setMsg=(id,t,err)=>{const el=$(id);el.className="msg"+(err?" err":"");el.textContent=t; if(t&&!/중…$/.test(t)) toast(t,err);};
 function banner(t,kind){const b=$("#banner"); if(!t){b.hidden=true;return} b.hidden=false; b.className="banner "+(kind||""); b.textContent=t}
 const hasGS=typeof google!=="undefined"&&google.script&&google.script.run;
 
@@ -382,9 +393,9 @@ async function refresh(silent){
   catch(e){ if(!silent) banner(e.message,"warn"); $("#meta").textContent="연결 안 됨"; render(); }
 }
 async function mutate(fn,args,okMsg,msgId,btn){
-  if(busy) return false; busy=true; if(btn) btn.disabled=true;
-  try{ applyData(await call(fn,...args)); setMsg(msgId,okMsg); return true }
-  catch(e){ setMsg(msgId,e.message,true); return false }
+  if(busy) return false; busy=true; const orig=btn&&btn.textContent; if(btn){btn.disabled=true; btn.textContent="저장 중…";}
+  try{ applyData(await call(fn,...args)); setMsg(msgId,okMsg); if(btn){btn.textContent="✓ 저장됨"; btn.classList.add("flash"); setTimeout(()=>{btn.textContent=orig; btn.classList.remove("flash")},1500);} return true }
+  catch(e){ setMsg(msgId,e.message,true); if(btn) btn.textContent=orig; return false }
   finally{ busy=false; if(btn) btn.disabled=false }
 }
 
