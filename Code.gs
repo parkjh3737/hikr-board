@@ -35,13 +35,15 @@ function sh(key) {
   if (!s) throw new Error("'" + SHEETS[key] + "' 탭이 없습니다. 시트 탭 이름을 확인하세요.");
   return s;
 }
+/** 날짜는 항상 '시트의 시간대' 기준으로 읽고 씁니다 (스크립트 시간대와 달라도 하루가 밀리지 않도록) */
+function sstz() { try { return ss().getSpreadsheetTimeZone() || TZ; } catch (e) { return TZ; } }
 function fmtDate(v) {
-  if (v instanceof Date) return isNaN(v) ? '' : Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+  if (v instanceof Date) return isNaN(v) ? '' : Utilities.formatDate(v, sstz(), 'yyyy-MM-dd');
   return v ? String(v).slice(0, 10) : '';
 }
-function toDate(s) { // 'yyyy-mm-dd' → Date (시트에 날짜로 저장)
+function toDate(s) { // 'yyyy-mm-dd' → 시트 시간대의 자정 Date
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : s;
+  return m ? Utilities.parseDate(m[0], sstz(), 'yyyy-MM-dd') : s;
 }
 function rows(key) { // 헤더 제외 데이터 행 (시트 행 번호 포함)
   const s = sh(key);
@@ -170,9 +172,10 @@ const ymd = (y, m, d) => y + '-' + pad2(m) + '-' + pad2(d);
 /** 해당 월의 캘린더·데일리·계수를 한 번에 반환. ym = 'YYYY-MM' (생략 시 이번 달) */
 function getOps(ym) {
   const now = new Date();
-  const y = ym ? Number(ym.slice(0, 4)) : Number(Utilities.formatDate(now, TZ, 'yyyy'));
-  const m = ym ? Number(ym.slice(5, 7)) : Number(Utilities.formatDate(now, TZ, 'M'));
   const book = SpreadsheetApp.openById(CAL_SS_ID);
+  const ctz = book.getSpreadsheetTimeZone() || TZ;
+  const y = ym ? Number(ym.slice(0, 4)) : Number(Utilities.formatDate(now, ctz, 'yyyy'));
+  const m = ym ? Number(ym.slice(5, 7)) : Number(Utilities.formatDate(now, ctz, 'M'));
   const out = { year: y, month: m, events: [], daily: {}, counts: {}, tabs: [], calUrl: book.getUrl() };
   out.tabs = book.getSheets().map(sh => sh.getName()).filter(n => /캘린더$/.test(n)).map(n => Number(n.replace(/[^0-9]/g, '')));
 
@@ -221,7 +224,7 @@ function setupSheets() {
   const spec = {
     '공간목록': [['층', '공간코드', '공간명'],
       ['지하3층', 'B301', '지하3층 창고'], ['1층', 'S101', '1층 웰컴데스크'], ['1층', 'S102', '1.5층 계단뒤'], ['2층', 'S201', '2층 서브인포'], ['2층', 'S202', '2층 인포 창고'],
-      ['2층', 'S203', '마이스테이지 시스템실'], ['2층', 'S204', '런드리 뒤'], ['2층', 'S205', '2층 비품창고'], ['2층', 'S206', '2층 화물엘베 앞'], ['3층', 'S301', '3층 사무국'],
+      ['2층', 'S203', '마이스테이지 시스템실'], ['2층', 'S204', '런드리 뒤'], ['2층', 'S205', '2층 비품창고'], ['2층', 'S206', '2층 화물엘베 앞'], ['2층', 'S207', '2층 휴게실'], ['3층', 'S301', '3층 사무국'],
       ['3층', 'S302', '3층 휴게실'], ['3층', 'S303', '3층 창고'], ['4층', 'S401', '4층 창고'], ['4층', 'S402', '4층 시스템실'],
       ['4층', 'S403', '이든사무실'], ['5층', 'S501', '5층 굿즈샵'], ['5층', 'S502', '5층 휴게공간'], ['-', 'S999', '폐기']],
     '비품목록': [['비품ID', '품명', '분류', '규격/상세', '단위', '최소보유수량', '비고']],

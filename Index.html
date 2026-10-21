@@ -371,7 +371,7 @@ let sel="5층", query="", editing=null, busy=false;
 try{const s=localStorage.getItem("hikr_sel"); if(s) sel=s}catch(e){}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const SHORT={"1층 웰컴데스크":"웰컴데스크","2층 서브인포":"서브인포","2층 인포 창고":"인포 창고","2층 비품창고":"비품창고","2층 화물엘베 앞":"화물엘베 앞","3층 사무국":"사무국","3층 휴게실":"휴게실","3층 창고":"창고","4층 창고":"창고","4층 시스템실":"시스템실","5층 굿즈샵":"굿즈샵","5층 휴게공간":"휴게공간","지하3층 창고":"창고"};
+const SHORT={"1층 웰컴데스크":"웰컴데스크","2층 서브인포":"서브인포","2층 인포 창고":"인포 창고","2층 비품창고":"비품창고","2층 화물엘베 앞":"화물엘베 앞","2층 휴게실":"휴게실","3층 사무국":"사무국","3층 휴게실":"휴게실","3층 창고":"창고","4층 창고":"창고","4층 시스템실":"시스템실","5층 굿즈샵":"굿즈샵","5층 휴게공간":"휴게공간","지하3층 창고":"창고"};
 const short=n=>SHORT[n]||n;
 const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 let toastT=null;
