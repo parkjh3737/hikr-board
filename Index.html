@@ -148,6 +148,14 @@ details summary::before{content:"▸"} details[open] summary::before{content:"�
 details+details{margin-top:8px}
 @media (prefers-reduced-motion:reduce){.floorcard{transition:none}}
 
+/* ---------- 검색 후보 · 미배치 ---------- */
+.suggest{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:-4px 0 8px}
+.sbtn{border:0;background:var(--panel);color:var(--fg);border-radius:999px;padding:4px 10px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.sbtn b{font-family:var(--font-num);color:var(--fg-2);font-weight:600}
+.sbtn:hover{background:var(--lime);color:#121212}
+#unplacedPanel .sbtn{background:var(--panel-2);padding:7px 12px;font-size:13px}
+#unplacedPanel .sbtn:hover{background:var(--orange)}
+.kpi.clickable{cursor:pointer}
 /* ---------- 토스트 ---------- */
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--ink-ink);border-radius:999px;padding:12px 20px;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:100;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:calc(100% - 32px);text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -263,6 +271,7 @@ details+details{margin-top:8px}
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <section class="kpis" id="kpis"></section>
+    <section class="detail" id="unplacedPanel" hidden></section>
 
     <div class="viewtabs" role="tablist">
       <button class="vtab" id="vFloor" role="tab" aria-selected="true">🏢 층별 보기</button>
@@ -305,7 +314,8 @@ details+details{margin-top:8px}
 
   <aside class="rail">
     <section class="card lime">
-      <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">▦</div><h2>품목별 층 분포</h2></div><input type="search" id="q" placeholder="품명·분류 검색" style="max-width:170px;background:var(--panel)" autocomplete="off"></div>
+      <div class="ch"><div style="display:flex;gap:10px;align-items:center"><div class="ic">▦</div><h2>품목별 층 분포</h2></div><input type="search" id="q" placeholder="품명·분류·초성(ㅎㄹㄴ) 검색" style="max-width:170px;background:var(--panel)" autocomplete="off"></div>
+      <div class="suggest" id="qSuggest" hidden></div>
       <div class="scroll" style="max-height:320px">
         <table id="itemTable"><thead><tr><th>품명</th><th class="r">1</th><th class="r">2</th><th class="r">3</th><th class="r">4</th><th class="r">5</th><th class="r">합계</th><th>상태</th></tr></thead><tbody></tbody></table>
       </div>
@@ -366,6 +376,7 @@ details+details{margin-top:8px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const FLOORS=["지하3층","1층","2층","3층","4층","5층"];
+const BOLLARD_SPACE="2층 화물엘베 앞"; // 이동 가능 차단봉 보관 위치
 const FL={"지하3층":"B3","1층":"1F","2층":"2F","3층":"3F","4층":"4F","5층":"5F"};
 const FCODE={"지하3층":"b3","1층":"1","2층":"2","3층":"3","4층":"4","5층":"5"};
 const flab=f=>FL[f]||f;
@@ -376,6 +387,14 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const SHORT={"1층 웰컴데스크":"웰컴데스크","2층 서브인포":"서브인포","2층 인포 창고":"인포 창고","2층 비품창고":"비품창고","2층 화물엘베 앞":"화물엘베 앞","2층 휴게실":"휴게실","3층 사무국":"사무국","3층 휴게실":"휴게실","3층 창고":"창고","4층 창고":"창고","4층 시스템실":"시스템실","5층 굿즈샵":"굿즈샵","5층 휴게공간":"휴게공간","지하3층 창고":"창고"};
 const short=n=>SHORT[n]||n;
+// 초성 검색: 'ㅎㄹㄴ' 같은 초성, 'ㅎ리녹' 같은 혼합, 일반 문자열 모두 매칭
+const CHO=["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+function matcher(q){
+  q=(q||"").trim(); if(!q) return ()=>true;
+  const parts=[...q].map(ch=>{const i=CHO.indexOf(ch); if(i>=0){const a=0xAC00+i*588,b=a+587;return `[${String.fromCharCode(a)}-${String.fromCharCode(b)}${ch}]`} return ch.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")});
+  let re; try{ re=new RegExp(parts.join(""),"i") }catch(e){ const l=q.toLowerCase(); return t=>String(t).toLowerCase().includes(l) }
+  return t=>re.test(String(t));
+}
 const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 let toastT=null;
 function toast(t,err){const el=$("#toast"); el.textContent=t; el.className="toast "+(err?"err":"ok")+" show"; clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("show"),err?4000:2500);}
@@ -436,6 +455,9 @@ function render(){
   const nameOf={}; data.items.forEach(i=>nameOf[i.id]=i.name);
   const total=perItem.reduce((a,b)=>a+b.total,0);
   const low=perItem.filter(i=>i.low);
+  const unplaced=perItem.filter(i=>i.total===0&&!Object.values(stock[i.id]||{}).some(v=>v));
+  const bItem=data.items.find(i=>/차단봉/.test(i.name));
+  const bollard={item:bItem,qty:bItem?((stock[bItem.id]||{})[BOLLARD_SPACE]||0):0};
   const floorTotals={}, floorKinds={};
   FLOORS.forEach(f=>{floorTotals[f]=perItem.reduce((a,i)=>a+(i.byFloor[f]||0),0); floorKinds[f]=perItem.filter(i=>(i.byFloor[f]||0)!==0).length});
   const selTotal=floorTotals[sel]||0;
@@ -445,7 +467,14 @@ function render(){
     <div class="kpi lime"><div class="blob"></div><div class="ic">▣</div><div class="v num">${total}</div><div class="l">전체 보유 수량 · ${perItem.length}종</div></div>
     <div class="kpi ${low.length?"orange":"limelt"}"><div class="blob"></div><div class="ic">!</div><div class="v num">${low.length}</div><div class="l">${low.length?"부족 품목: "+esc(low.map(i=>i.name).join(", ")):"부족 품목 없음"}</div></div>
     <div class="kpi peach"><div class="blob"></div><div class="ic">${flab(sel).replace("F","")}</div><div class="v num">${selTotal}</div><div class="l">${sel} 보유 · ${floorKinds[sel]}종 · 전체의 ${total?Math.round(selTotal/total*100):0}%</div></div>
-    <div class="kpi limelt"><div class="blob"></div><div class="ic">⇄</div><div class="v num">${data.moves.filter(m=>m.ok==="O").length}</div><div class="l">이동 기록 · 마지막 ${data.moves.map(m=>m.date).sort().pop()||"-"}</div></div>`;
+    <div class="kpi ${unplaced.length?"orange":"limelt"} ${unplaced.length?"clickable":""}" id="kpiUnplaced" title="눌러서 위치 정하기"><div class="blob"></div><div class="ic">📍</div><div class="v num">${unplaced.length}</div><div class="l">${unplaced.length?"미배치 비품 · 눌러서 위치 정하기":"미배치 비품 없음"}</div></div>
+    <div class="kpi lime"><div class="blob"></div><div class="ic">🚧</div><div class="v num">${bollard.qty}</div><div class="l">이동 가능 차단봉${bollard.item?` · ${esc(short(BOLLARD_SPACE))}`:" · 차단봉 미등록"}</div></div>`;
+  // 미배치 비품 패널
+  const up=$("#unplacedPanel");
+  if(unplaced.length){ up.hidden=false; up.innerHTML=`<div class="ph"><h2>📍 미배치 비품 ${unplaced.length}종</h2><span class="msg">등록만 되고 위치·수량이 없는 비품입니다. 눌러서 입고 위치를 정하세요.</span></div><div class="fchips">${unplaced.map(i=>`<button type="button" class="sbtn" data-place="${esc(i.id)}">${esc(i.name)}<b>${esc(i.id)}</b></button>`).join("")}</div>`;
+    up.querySelectorAll("[data-place]").forEach(b=>b.onclick=()=>placeItem(b.dataset.place)); }
+  else { up.hidden=true; up.innerHTML=""; }
+  const ku=$("#kpiUnplaced"); if(ku&&unplaced.length) ku.onclick=()=>{ up.scrollIntoView({behavior:"smooth",block:"center"}); up.classList.add("flash"); setTimeout(()=>up.classList.remove("flash"),900); };
 
   $("#floorNav").innerHTML=[...FLOORS].reverse().map(f=>`<button class="fbtn" aria-selected="${f===sel}" data-f="${f}">${flab(f)}<small>${floorTotals[f]}</small></button>`).join("");
   $("#floorNav").querySelectorAll(".fbtn").forEach(b=>b.onclick=()=>{sel=b.dataset.f;try{localStorage.setItem("hikr_sel",sel)}catch(e){};render()});
@@ -484,8 +513,11 @@ function render(){
     <tr style="font-weight:700;background:var(--panel-2)"><td>층 합계</td><td></td>${FLOORS.map(f=>`<td class="r num">${floorTotals[f]}</td>`).join("")}<td class="r num">${total}</td><td></td><td></td></tr>
     </tbody></table></div>`;
 
-  const q=query.trim().toLowerCase();
-  $("#itemTable tbody").innerHTML=perItem.filter(i=>!q||(i.name+i.cat+i.id).toLowerCase().includes(q)).map(i=>{
+  const q=query.trim(); const mt=matcher(q);
+  const hits=q?perItem.filter(i=>mt(i.name)||mt(i.cat||"")||mt(i.id)):perItem;
+  const sg=$("#qSuggest"); if(q&&hits.length){ sg.hidden=false; sg.innerHTML=`<span class="msg">후보 ${hits.length}종</span>`+hits.slice(0,12).map(i=>`<button type="button" class="sbtn" data-pick="${esc(i.name)}">${esc(i.name)}<b>${i.total}</b></button>`).join(""); sg.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{query=b.dataset.pick; $("#q").value=query; render()}); }
+  else if(q){ sg.hidden=false; sg.innerHTML=`<span class="msg">'${esc(q)}'에 해당하는 비품이 없습니다</span>`; } else { sg.hidden=true; sg.innerHTML=""; }
+  $("#itemTable tbody").innerHTML=hits.map(i=>{
     if(editing===i.id) return `<tr class="editrow"><td colspan="8"><div class="editbox">
       <label>품명<input type="text" id="eName" value="${esc(i.name)}" required></label>
       <label>분류<input type="text" id="eCat" value="${esc(i.cat||"")}"></label>
@@ -559,6 +591,13 @@ $("#addStock").onclick=async()=>{
   if(ok){ $("#sQty").value=1; $("#sNote").value=""; }
 };
 $("#q").oninput=e=>{query=e.target.value;render()};
+function placeItem(id){
+  $("#stockBox").open=true; $("#sItem").value=id; $("#sQty").value=1;
+  const card=$("#stockBox").closest(".card"); card.scrollIntoView({behavior:"smooth",block:"start"});
+  card.classList.add("flash"); setTimeout(()=>card.classList.remove("flash"),900);
+  setTimeout(()=>$("#sSpace").focus(),400);
+  const nm=(data.items.find(i=>i.id===id)||{}).name||id; setMsg("#regMsg",`${nm} 선택됨 — 공간과 수량을 고르고 '입고 저장'을 누르세요.`);
+}
 $("#refreshBtn").onclick=()=>refresh(false);
 let view="floor"; try{view=localStorage.getItem("hikr_view")||"floor"}catch(e){}
 function setView(v){view=v; $("#floorView").hidden=v!=="floor"; $("#itemView").hidden=v!=="item"; $("#schedView").hidden=v!=="sched"; $("#vFloor").setAttribute("aria-selected",v==="floor"); $("#vItem").setAttribute("aria-selected",v==="item"); $("#vSched").setAttribute("aria-selected",v==="sched"); try{localStorage.setItem("hikr_view",v)}catch(e){} if(v==="sched") loadOps(); }
